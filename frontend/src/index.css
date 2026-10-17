@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Mercury Visions Design System ── */
+:root {
+  --mercury-black: #0a0a0a;
+  --mercury-dark: #111111;
+  --mercury-gray-900: #1a1a1a;
+  --mercury-gray-600: #595959;
+  --mercury-gray-400: #8f8f8f;
+  --mercury-gray-200: #d4d4d4;
+  --mercury-gray-100: #e8e8e8;
+  --mercury-gray-50: #f5f5f5;
+  --mercury-white: #ffffff;
+  --mercury-off: #fafafa;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--mercury-white);
+    color: var(--mercury-black);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background-color: var(--mercury-dark);
+    color: var(--mercury-white);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--mercury-gray-200);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--mercury-gray-400);
+  }
+}
+
+@layer components {
+  /* ── Gradient Text ── */
+  .gradient-heading {
+    background: linear-gradient(180deg, #000000 0%, #555555 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-heading-sm {
+    background: linear-gradient(180deg, #111111 0%, #666666 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Spatial Label ── */
+  .spatial-label {
+    @apply text-xs font-medium tracking-widest uppercase text-mercury-gray-500;
+    letter-spacing: 0.14em;
+  }
+
+  /* ── Mercury Card ── */
+  .mercury-card {
+    @apply bg-white border border-mercury-gray-100 rounded-2xl shadow-mercury-sm;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .mercury-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  /* ── Mercury Input ── */
+  .mercury-input {
+    @apply w-full px-4 py-3 bg-mercury-gray-50 border border-mercury-gray-100 rounded-xl text-sm text-mercury-black placeholder-mercury-gray-400;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    outline: none;
+  }
+
+  .mercury-input:focus {
+    @apply bg-white border-mercury-gray-300;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.06);
+  }
+
+  /* ── Mercury Button ── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-mercury-black text-white text-sm font-semibold rounded-xl;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+  }
+
+  .btn-primary:hover {
+    @apply bg-mercury-gray-900;
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-mercury-black text-sm font-semibold rounded-xl border border-mercury-gray-200;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-mercury-gray-50 border-mercury-gray-300;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-2 text-mercury-gray-600 text-sm font-medium rounded-lg;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .btn-ghost:hover {
+    @apply bg-mercury-gray-50 text-mercury-black;
+  }
+
+  /* ── Mercury Badge ── */
+  .badge-verified {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-mercury-black text-white text-xs font-semibold rounded-full;
+  }
+
+  .badge-self-reported {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-mercury-gray-100 text-mercury-gray-700 text-xs font-semibold rounded-full;
+  }
+
+  .badge-pending {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-mercury-gray-50 text-mercury-gray-500 text-xs font-medium rounded-full border border-mercury-gray-200;
+  }
+
+  .badge-institution {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-mercury-gray-900 text-white text-xs font-medium rounded-full;
+  }
+
+  /* ── Blob Decoration ── */
+  .mercury-blob {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 30% 30%, #3a3a3a 0%, #1a1a1a 40%, #000000 100%);
+    filter: blur(0px);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ── Sidebar Link ── */
+  .nav-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-mercury-gray-600;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .nav-link:hover {
+    @apply bg-mercury-gray-50 text-mercury-black;
+  }
+
+  .nav-link.active {
+    @apply bg-mercury-black text-white;
+  }
+
+  /* ── Feed Tab ── */
+  .feed-tab {
+    @apply px-4 py-2.5 text-sm font-medium text-mercury-gray-500 border-b-2 border-transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .feed-tab:hover {
+    @apply text-mercury-black;
+  }
+
+  .feed-tab.active {
+    @apply text-mercury-black border-mercury-black;
+  }
+
+  /* ── Shimmer Loading ── */
+  .shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
+
+/* ── Focus Visible ── */
+*:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

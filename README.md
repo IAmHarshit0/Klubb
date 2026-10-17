@@ -17,70 +17,46 @@ Demonstrate two connected workflows:
 - **Group access:** request access to restricted groups; authorized supervisors approve or decline.
 - **Moderation:** report content or users, with escalation through the administrative hierarchy.
 
-## Tech Stack
-- **Frontend:** React, TypeScript, Vite; Tailwind CSS optional
-- **Backend:** Python, FastAPI, Pydantic
-- **Database:** PostgreSQL
-- **Reranking:** FlashRank, behind a model-independent interface
+## Tech Stack (v3.0 Final Specification)
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS (Mercury Visions spatial interface aesthetic)
+- **Backend:** Node.js, TypeScript, Express, Socket.IO
+- **Database:** MongoDB
+- **Ranking:** Baseline deterministic scoring with optional FlashRank adapter
 
 ## Architecture
-Use a **modular monolith**: one frontend, one backend, and one database. Microservices and a vector database are not required for the MVP.
+Use a **modular monolith**: one React/Vite frontend, one Node/Express backend, and one MongoDB database.
 
 ```text
-React + TypeScript
-        |
-      REST API
-        |
-FastAPI modular backend
-  |      |       |
- Feed  Profiles  Connections / Groups
-        |
-  Feed ranking service
-  Candidate retrieval -> FlashRank -> freshness/diversity
-        |
-    PostgreSQL
-```
-
-## Repository Layout
-```text
-campus-network/
-├── frontend/
-│   └── src/
-│       ├── components/
-│       ├── features/
-│       │   ├── feed/
-│       │   ├── profiles/
-│       │   ├── discovery/
-│       │   ├── connections/
-│       │   └── groups/
-│       └── lib/api.ts
-├── backend/
-│   └── app/
-│       ├── main.py
-│       ├── api/
-│       ├── models/
-│       ├── schemas/
-│       ├── db/
-│       └── services/
-│           ├── feed.py
-│           ├── ranking.py
-│           ├── permissions.py
-│           └── connections.py
-├── tests/
-├── docker-compose.yml
-├── .env.example
-└── README.md
+React 18 + TypeScript + Vite (Port 5173)
+        │
+      REST & Socket.IO (Proxy)
+        ▼
+Node.js + Express + Socket.IO (Port 4000)
+  ├── Feed (For You, Alumni, Students, Following)
+  ├── Discovery (Structured Filters, People Search)
+  ├── Institutions & Communities (Tree Hierarchy, Announcements)
+  ├── Connections & Real-time Messaging (Socket.IO + Gatekeeper)
+  └── Groups & Scoped Moderation
+        │
+     MongoDB (campus_network)
 ```
 
 ## Getting Started
-The implementation setup is not finalized yet. Once dependencies and environment variables are added:
-1. Configure the backend database connection.
-2. Start PostgreSQL.
-3. Run the FastAPI backend.
-4. Run the Vite frontend.
-5. Load seed data for one demo institution, students, alumni, groups, and posts.
 
-Add exact commands here when the project scaffolding is committed.
+### 1. Backend Setup
+```bash
+cd backend
+npm install
+npm run seed  # Populates Apex University demo dataset
+npm run dev   # Starts server on http://localhost:4000
+```
+
+### 2. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev   # Starts Vite on http://localhost:5173
+```
 
 ## MVP Acceptance Criteria
 - A seeded institution contains students, alumni, groups, and posts.
