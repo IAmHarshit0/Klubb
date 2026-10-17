@@ -130,6 +130,12 @@ export interface Connection {
   message?: string;
   createdAt: string;
   updatedAt: string;
+  otherUser?: {
+    id: string;
+    name: string;
+    bio?: string;
+    skills?: string[];
+  } | null;
 }
 
 export interface Conversation {
@@ -187,11 +193,18 @@ export interface DemoUser {
 }
 
 export const DEMO_USERS: DemoUser[] = [
+  // 1. Students
   { id: 'usr-student-001', name: 'Alex Rivera', role: 'Student — CS', demoKey: 'student-alex' },
   { id: 'usr-student-002', name: 'Jordan Lee', role: 'Student — Bioengineering', demoKey: 'student-jordan' },
-  { id: 'usr-student-003', name: 'Maya Patel', role: 'Student — CS', demoKey: 'student-maya' },
-  { id: 'usr-alumnus-001', name: 'Priya Sharma', role: 'Alumni — Stripe', demoKey: 'alumnus-priya' },
-  { id: 'usr-alumnus-002', name: 'Marcus Chen', role: 'Alumni — DeepMind', demoKey: 'alumnus-marcus' },
-  { id: 'usr-alumnus-003', name: 'Sara Kim', role: 'Alumni — Databricks', demoKey: 'alumnus-sara' },
-  { id: 'usr-faculty-001', name: 'Dr. Elena Vance', role: 'Faculty — CS', demoKey: 'faculty-elena' },
+  { id: 'usr-student-003', name: 'Maya Patel', role: 'Student Ambassador (Delegated Role)', demoKey: 'student-maya' },
+  // 2. Campus Network Members (Alumni & Faculty)
+  { id: 'usr-alumnus-001', name: 'Priya Sharma', role: 'Campus Member — Alumna (Stripe)', demoKey: 'alumnus-priya' },
+  { id: 'usr-alumnus-002', name: 'Marcus Chen', role: 'Campus Member — Alumnus (DeepMind)', demoKey: 'alumnus-marcus' },
+  { id: 'usr-alumnus-003', name: 'Sara Kim', role: 'Campus Member — Alumna (Databricks)', demoKey: 'alumnus-sara' },
+  { id: 'usr-faculty-001', name: 'Dr. Elena Vance', role: 'Campus Member — Faculty & Supervisor', demoKey: 'faculty-elena' },
+  // 3. Super Admins of Campus
+  { id: 'usr-admin-001', name: 'Dean Robert Sterling', role: 'Super Admin — Academic Affairs', demoKey: 'admin-robert' },
+  // 4. Roles Created by Super Admins (Delegated Officers)
+  { id: 'usr-officer-001', name: 'Sarah Jenkins', role: 'Verification Officer (Super Admin Role)', demoKey: 'officer-sarah' },
 ];
+

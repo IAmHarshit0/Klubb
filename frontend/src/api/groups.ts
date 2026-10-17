@@ -33,3 +33,8 @@ export async function updateGroup(
   const response = await api.patch(`/groups/${groupId}`, data);
   return response.data;
 }
+
+export async function getGroupPosts(groupId: string) {
+  const response = await api.get<{ posts: any[] }>(`/groups/${groupId}/posts`);
+  return response.data;
+}

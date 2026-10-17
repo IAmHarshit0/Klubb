@@ -26,6 +26,44 @@ followsRouter.post("/follows", authenticateUser, async (req: Request, res: Respo
   }
 });
 
+// GET /api/follows
+followsRouter.get("/follows", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const follows = await Follow.find({ followerId: req.user!._id });
+    res.json({ follows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/follows/user/:userId
+followsRouter.delete("/follows/user/:userId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const follow = await Follow.findOneAndDelete({
+      followerId: req.user!._id,
+      targetType: "user",
+      targetId: req.params.userId,
+    });
+    res.json({ message: "Unfollowed user successfully", follow });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/follows/topic/:topicId
+followsRouter.delete("/follows/topic/:topicId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const follow = await Follow.findOneAndDelete({
+      followerId: req.user!._id,
+      targetType: "topic",
+      targetId: req.params.topicId,
+    });
+    res.json({ message: "Unfollowed topic successfully", follow });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/follows/:followId
 followsRouter.delete("/follows/:followId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -245,3 +245,34 @@ institutionsRouter.post(
   }
 );
 
+// GET /api/institutions/:id/roles
+institutionsRouter.get(
+  "/institutions/:id/roles",
+  optionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const institutionId = req.params.id;
+      const { RoleDefinition } = await import("../../shared/models.js");
+      const roles = await RoleDefinition.find({ institutionId });
+      res.json({ roles });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /api/institutions/:id/role-assignments
+institutionsRouter.get(
+  "/institutions/:id/role-assignments",
+  optionalAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const institutionId = req.params.id;
+      const { RoleAssignment } = await import("../../shared/models.js");
+      const assignments = await RoleAssignment.find({ scopeId: institutionId, status: "active" });
+      res.json({ roleAssignments: assignments });
+    } catch (err) {
+      next(err);
+    }
+  }
+);

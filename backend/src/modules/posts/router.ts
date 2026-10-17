@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { authenticateUser } from "../auth/middleware.js";
-import { Post, Comment, PostInteraction } from "../../shared/models.js";
+import { Post, Comment, PostInteraction, Affiliation } from "../../shared/models.js";
 import { canViewPost, canPostToAudience } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 
@@ -16,7 +16,13 @@ postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response,
       return next(new AppError("Post text is required", 400));
     }
 
-    const isAuthorized = await canPostToAudience(req.user!._id, audienceType, audienceId, institutionId);
+    let targetInstId = institutionId;
+    if (audienceType === "campus" && !targetInstId) {
+      const aff = await Affiliation.findOne({ userId: req.user!._id, status: "active" });
+      if (aff) targetInstId = aff.institutionId;
+    }
+
+    const isAuthorized = await canPostToAudience(req.user!._id, audienceType, audienceId, targetInstId);
     if (!isAuthorized) {
       return next(new AppError("Not authorized to publish to this audience", 403));
     }
@@ -28,7 +34,7 @@ postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response,
       media: media || [],
       audienceType,
       audienceId,
-      institutionId,
+      institutionId: targetInstId,
       topicLabels,
       createdAt: new Date(),
     });

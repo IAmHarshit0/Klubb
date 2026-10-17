@@ -32,6 +32,14 @@ export function setupSocketIO(io: SocketIOServer): void {
   io.on("connection", (socket: AuthenticatedSocket) => {
     const userId = socket.userId!;
 
+    // Suppress transient disconnect and abort errors on client sockets
+    socket.on("error", (err: any) => {
+      if (err?.code === "ECONNABORTED" || err?.code === "ECONNRESET" || err?.code === "EPIPE") {
+        return;
+      }
+      console.warn(`Socket error for user ${userId}:`, err?.message || err);
+    });
+
     // 1. conversation:join
     socket.on("conversation:join", async (data: { conversationId: string }, callback?: (res: any) => void) => {
       try {

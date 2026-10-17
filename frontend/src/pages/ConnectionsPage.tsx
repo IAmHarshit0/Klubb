@@ -107,7 +107,7 @@ export function ConnectionsPage() {
               >
                 <div className="flex items-start gap-4">
                   <div className="w-11 h-11 rounded-full bg-mercury-black text-white flex items-center justify-center font-bold text-sm shadow-mercury-sm flex-shrink-0">
-                    {otherUserId.replace(/^usr-/, '').charAt(0).toUpperCase()}
+                    {(conn.otherUser?.name || otherUserId.replace(/^usr-/, '')).charAt(0).toUpperCase()}
                   </div>
 
                   <div>
@@ -116,7 +116,7 @@ export function ConnectionsPage() {
                         to={`/profile/${otherUserId}`}
                         className="text-sm font-bold text-mercury-black hover:underline flex items-center gap-1"
                       >
-                        User: {otherUserId}
+                        {conn.otherUser?.name || `User: ${otherUserId}`}
                         <ArrowUpRight size={12} className="text-mercury-gray-400" />
                       </Link>
 

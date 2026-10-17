@@ -24,7 +24,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     if (!userId) return;
 
-    const socket = io('/', {
+    const defaultUrl =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://127.0.0.1:4000'
+        : '/';
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || defaultUrl;
+
+    const socket = io(socketUrl, {
       auth: { userId },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -35,11 +42,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
     socket.on('connect_error', () => setIsConnected(false));
+    socket.on('error', (err) => {
+      console.warn('Socket client error:', err);
+    });
 
     socketRef.current = socket;
 
     return () => {
-      socket.disconnect();
+      if (socket.connected) {
+        socket.disconnect();
+      }
       socketRef.current = null;
       setIsConnected(false);
     };

@@ -55,7 +55,6 @@ export function DiscoveryPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['discover', 'people', searchParams],
     queryFn: () => discoverPeople(searchParams),
-    enabled: hasSearch,
   });
 
   const { data: connectionsData } = useQuery({
@@ -187,11 +186,7 @@ export function DiscoveryPage() {
 
       {/* Results */}
       <div>
-        {!hasSearch && (
-          <SearchEmptyState />
-        )}
-
-        {isLoading && hasSearch && (
+        {isLoading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
           </div>
@@ -201,7 +196,7 @@ export function DiscoveryPage() {
           <p className="text-sm text-red-600 text-center py-8">{(error as Error).message}</p>
         )}
 
-        {data?.results?.length === 0 && hasSearch && !isLoading && (
+        {data?.results?.length === 0 && !isLoading && (
           <SearchEmptyState query={debouncedQuery} />
         )}
 

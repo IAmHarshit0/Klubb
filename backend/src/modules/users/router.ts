@@ -45,11 +45,44 @@ usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, nex
   }
 });
 
+// GET /api/users/me
+usersRouter.get("/users/me", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const affiliations = await Affiliation.find({ userId: user._id, status: "active" });
+    const employmentClaims = await EmploymentClaim.find({ userId: user._id });
+    const connectionPrefs = await UserConnectionPreferences.findOne({ userId: user._id });
+
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        bio: user.bio,
+        portfolioUrl: user.portfolioUrl,
+        skills: user.skills,
+        interests: user.interests,
+        profileVisibility: user.profileVisibility,
+        affiliations,
+        employmentClaims,
+        connectionPreferences: connectionPrefs || {
+          availableForMentorship: true,
+          availableForReferrals: true,
+          availableForQuestions: true,
+          pauseIncomingRequests: false,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/users/:userId
 usersRouter.get("/users/:userId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const viewer = req.user!;
-    const targetUserId = req.params.userId as string;
+    const targetUserId = req.params.userId === "me" ? viewer._id : (req.params.userId as string);
 
     const allowed = await canViewProfile(viewer._id, targetUserId);
     if (!allowed) {

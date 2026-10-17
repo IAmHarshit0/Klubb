@@ -125,3 +125,37 @@ export async function canModerateGroup(userId: string, groupId: string): Promise
   });
   return !!mem;
 }
+
+export async function hasInstitutionPermission(
+  userId: string,
+  institutionId: string,
+  requiredPermission: string
+): Promise<boolean> {
+  // 1. Check if user is institution admin affiliation
+  const adminAff = await Affiliation.findOne({
+    userId,
+    institutionId,
+    role: "Admin",
+    status: "active",
+  });
+  if (adminAff) return true;
+
+  // 2. Check role assignments and definitions
+  const { RoleAssignment, RoleDefinition } = await import("./models.js");
+  const assignments = await RoleAssignment.find({
+    userId,
+    status: "active",
+    scopeType: "institution",
+    scopeId: institutionId,
+  });
+
+  if (assignments.length === 0) return false;
+
+  const roleDefIds = assignments.map((a) => a.roleDefinitionId);
+  const roles = await RoleDefinition.find({
+    _id: { $in: roleDefIds },
+  });
+
+  return roles.some((r) => r.permissions.includes(requiredPermission) || r.permissions.includes("*"));
+}
+

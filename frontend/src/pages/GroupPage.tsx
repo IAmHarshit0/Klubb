@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getGroup, requestGroupAccess, postToGroup } from '../api/groups';
+import { getGroup, requestGroupAccess, postToGroup, getGroupPosts } from '../api/groups';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Input';
 import { PageSpinner } from '../components/ui/Spinner';
-import { Users, Shield, Send, Lock, Globe } from 'lucide-react';
+import { Users, Shield, Send, Lock, Globe, MessageSquare, Clock } from 'lucide-react';
 
 export function GroupPage() {
   const { groupId = 'grp-robotics-club' } = useParams<{ groupId: string }>();
@@ -25,6 +25,15 @@ export function GroupPage() {
   const group = data?.group;
   const memberCount = data?.memberCount ?? 0;
   const membership = data?.membership;
+  const isMember = !!membership && membership.status === 'active';
+
+  // Group posts query
+  const { data: postsData, isLoading: loadingPosts } = useQuery({
+    queryKey: ['group-posts', groupId],
+    queryFn: () => getGroupPosts(groupId),
+    enabled: group?.visibility !== 'restricted' || isMember,
+  });
+  const groupPosts = postsData?.posts || [];
 
   // Request access mutation
   const accessMutation = useMutation({
@@ -41,6 +50,7 @@ export function GroupPage() {
     mutationFn: (text: string) => postToGroup(groupId, { text }),
     onSuccess: () => {
       setPostText('');
+      queryClient.invalidateQueries({ queryKey: ['group-posts', groupId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       toast('Group post published', 'success');
     },
@@ -55,8 +65,6 @@ export function GroupPage() {
       </div>
     );
   }
-
-  const isMember = !!membership && membership.status === 'active';
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
@@ -137,13 +145,64 @@ export function GroupPage() {
           </div>
         </div>
       ) : (
-        <div className="mercury-card p-8 text-center text-mercury-gray-500">
+        <div className="mercury-card p-8 text-center text-mercury-gray-500 mb-8">
           <Lock size={28} className="mx-auto mb-3 text-mercury-gray-300" />
           <h3 className="text-sm font-bold text-mercury-black mb-1">Restricted Group Community</h3>
           <p className="text-xs max-w-sm mx-auto text-mercury-gray-400">
             Posts within this space are protected by server-side membership checks.
             Request access above to view and participate.
           </p>
+        </div>
+      )}
+
+      {/* Group Posts Feed */}
+      {(group.visibility !== 'restricted' || isMember) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageSquare size={16} className="text-mercury-black" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-mercury-black">
+              Group Discussions ({groupPosts.length})
+            </h2>
+          </div>
+
+          {loadingPosts ? (
+            <p className="text-xs text-mercury-gray-400 py-6 text-center">Loading posts...</p>
+          ) : groupPosts.length === 0 ? (
+            <div className="mercury-card p-8 text-center text-mercury-gray-400">
+              <p className="text-xs">No posts in this group yet. Be the first to start a conversation!</p>
+            </div>
+          ) : (
+            groupPosts.map((post: any) => (
+              <div key={post.id} className="mercury-card p-6">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-mercury-gray-100 flex items-center justify-center text-xs font-bold text-mercury-gray-700">
+                      {post.author?.name?.charAt(0) || '?'}
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-mercury-black block">{post.author?.name}</span>
+                      <span className="text-[11px] text-mercury-gray-400 flex items-center gap-1">
+                        <Clock size={10} />
+                        {new Date(post.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-mercury-gray-800 whitespace-pre-wrap leading-relaxed mt-2">
+                  {post.text}
+                </p>
+                {post.topicLabels?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {post.topicLabels.map((t: string) => (
+                      <span key={t} className="px-2 py-0.5 bg-mercury-gray-50 text-mercury-gray-600 rounded text-[11px]">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

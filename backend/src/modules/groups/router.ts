@@ -6,6 +6,7 @@ import {
   Membership,
   GroupAccessRequest,
   Post,
+  User,
 } from "../../shared/models.js";
 import { canModerateGroup } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
@@ -166,6 +167,60 @@ groupsRouter.post("/groups/:groupId/posts", authenticateUser, async (req: Reques
 
     await post.save();
     res.status(201).json({ post });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/groups/:groupId/posts
+groupsRouter.get("/groups/:groupId/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.groupId;
+    const group = await Group.findById(groupId);
+    if (!group) return next(new AppError("Group not found", 404));
+
+    if (group.visibility === "restricted") {
+      const membership = await Membership.findOne({
+        userId: req.user!._id,
+        groupId,
+        status: "active",
+      });
+      if (!membership) {
+        return next(new AppError("You must be an active member to view posts in this group", 403));
+      }
+    }
+
+    const posts = await Post.find({
+      audienceType: "group",
+      audienceId: groupId,
+    }).sort({ createdAt: -1 });
+
+    const authorIds = Array.from(new Set(posts.map((p) => p.authorId)));
+    const authors = await User.find({ _id: { $in: authorIds } });
+    const authorMap = new Map(authors.map((u) => [u._id, u]));
+
+    const formatted = posts.map((p) => {
+      const author = authorMap.get(p.authorId);
+      return {
+        id: p._id,
+        text: p.text,
+        media: p.media,
+        audienceType: p.audienceType,
+        audienceId: p.audienceId,
+        institutionId: p.institutionId,
+        topicLabels: p.topicLabels,
+        createdAt: p.createdAt,
+        author: {
+          id: author?._id || p.authorId,
+          name: author?.name || "Member",
+          role: "Member",
+          institutionId: p.institutionId,
+          verificationStatus: "institution-verified",
+        },
+      };
+    });
+
+    res.json({ posts: formatted });
   } catch (err) {
     next(err);
   }

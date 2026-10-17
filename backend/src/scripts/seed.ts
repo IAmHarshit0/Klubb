@@ -19,6 +19,9 @@ import {
   Comment,
   PostInteraction,
   UserFeedPreferences,
+  RoleDefinition,
+  RoleAssignment,
+  InstitutionAnnouncement,
 } from "../shared/models.js";
 
 export async function seedDatabase(): Promise<void> {
@@ -45,6 +48,9 @@ export async function seedDatabase(): Promise<void> {
     UserFeedPreferences.deleteMany({}),
     Organisation.deleteMany({}),
     Follow.deleteMany({}),
+    RoleDefinition.deleteMany({}),
+    RoleAssignment.deleteMany({}),
+    InstitutionAnnouncement.deleteMany({}),
   ]);
 
   const now = new Date();
@@ -133,6 +139,26 @@ export async function seedDatabase(): Promise<void> {
       interests: ["Robotics Lab", "AI Ethics", "Student Research"],
       profileVisibility: "public",
     }),
+    new User({
+      _id: "usr-admin-001",
+      name: "Dean Robert Sterling",
+      email: "dean.sterling@apex.edu",
+      demoKey: "admin-robert",
+      bio: "Dean of Academic Affairs & Super Administrator for Apex University Campus Network.",
+      skills: ["Academic Governance", "Institutional Policy", "Campus Administration"],
+      interests: ["Higher Ed Leadership", "Institutional Strategy", "Accreditation"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-officer-001",
+      name: "Sarah Jenkins",
+      email: "s.jenkins@apex.edu",
+      demoKey: "officer-sarah",
+      bio: "Campus Placement & Verification Officer. Manages student credentials and employer verifications.",
+      skills: ["Credential Verification", "Student Affairs", "Career Development"],
+      interests: ["Alumni Relations", "Career Fair", "Audits"],
+      profileVisibility: "public",
+    }),
   ];
   await User.insertMany(users);
 
@@ -212,6 +238,28 @@ export async function seedDatabase(): Promise<void> {
       programme: "School of Computing",
       department: "Computer Science",
       batch: "Faculty",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-admin-001",
+      userId: "usr-admin-001",
+      institutionId: "inst-apex-001",
+      role: "Admin",
+      programme: "University Administration",
+      department: "Academic Affairs",
+      batch: "Administration",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-officer-001",
+      userId: "usr-officer-001",
+      institutionId: "inst-apex-001",
+      role: "Faculty",
+      programme: "Placement & Verification Division",
+      department: "Career Services",
+      batch: "Staff",
       verificationStatus: "institution-verified",
       verifiedAt: now,
     }),
@@ -391,6 +439,90 @@ export async function seedDatabase(): Promise<void> {
     targetId: "Distributed Systems",
   });
   await demoFollow.save();
+
+  // 11. Custom Role Definitions created by Super Admin (Dean Sterling)
+  const roleVerificationOfficer = new RoleDefinition({
+    _id: "role-verif-officer",
+    institutionId: "inst-apex-001",
+    scopeType: "institution",
+    scopeId: "inst-apex-001",
+    name: "Verification & Placement Officer",
+    permissions: [
+      "verify_affiliation",
+      "verify_employment",
+      "publish_announcement",
+      "view_audit_logs",
+    ],
+    createdBy: "usr-admin-001",
+  });
+
+  const roleStudentAmbassador = new RoleDefinition({
+    _id: "role-student-ambassador",
+    institutionId: "inst-apex-001",
+    scopeType: "institution",
+    scopeId: "inst-apex-001",
+    name: "Campus Student Ambassador",
+    permissions: [
+      "host_campus_events",
+      "broadcast_student_announcements",
+      "moderate_student_groups",
+    ],
+    createdBy: "usr-admin-001",
+  });
+
+  await RoleDefinition.insertMany([roleVerificationOfficer, roleStudentAmbassador]);
+
+  // 12. Role Assignments (Created by Dean Robert Sterling)
+  const roleAssignments = [
+    new RoleAssignment({
+      _id: "rass-sarah-verif",
+      userId: "usr-officer-001",
+      roleDefinitionId: "role-verif-officer",
+      scopeType: "institution",
+      scopeId: "inst-apex-001",
+      assignedBy: "usr-admin-001",
+      status: "active",
+      createdAt: now,
+    }),
+    new RoleAssignment({
+      _id: "rass-maya-ambassador",
+      userId: "usr-student-003",
+      roleDefinitionId: "role-student-ambassador",
+      scopeType: "institution",
+      scopeId: "inst-apex-001",
+      assignedBy: "usr-admin-001",
+      status: "active",
+      createdAt: now,
+    }),
+  ];
+  await RoleAssignment.insertMany(roleAssignments);
+
+  // 13. Official Institution Announcements (Broadcasts by Dean Sterling and Officer Sarah)
+  const announcements = [
+    new InstitutionAnnouncement({
+      _id: "ann-dean-welcome",
+      institutionId: "inst-apex-001",
+      senderId: "usr-admin-001",
+      targetType: "institution",
+      targetIds: [],
+      title: "Welcome to Academic Year 2026-2027",
+      body: "Welcome all Apex University students, faculty, and alumni. Campus Network v3.0 is now live for all department collaborations and verified professional networking.",
+      status: "published",
+      createdAt: new Date(Date.now() - 3600 * 1000 * 24),
+    }),
+    new InstitutionAnnouncement({
+      _id: "ann-sarah-placements",
+      institutionId: "inst-apex-001",
+      senderId: "usr-officer-001",
+      targetType: "institution",
+      targetIds: [],
+      title: "Spring Career Fair & Alumni Mentorship Window Open",
+      body: "All verified students may now submit connection requests directly to verified alumni at Stripe, DeepMind, and Databricks. Verify your department affiliations in your profile tab.",
+      status: "published",
+      createdAt: new Date(Date.now() - 3600 * 1000 * 4),
+    }),
+  ];
+  await InstitutionAnnouncement.insertMany(announcements);
 
   console.log("MongoDB demo dataset seeded successfully!");
 }

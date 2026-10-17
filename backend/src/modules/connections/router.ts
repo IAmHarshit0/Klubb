@@ -27,7 +27,32 @@ connectionsRouter.get("/connections", authenticateUser, async (req: Request, res
     }
 
     const connections = await Connection.find(query).sort({ createdAt: -1 });
-    res.json({ connections });
+
+    const otherUserIds = Array.from(
+      new Set(
+        connections.map((c) => (c.requesterId === viewerId ? c.recipientId : c.requesterId))
+      )
+    );
+    const users = await User.find({ _id: { $in: otherUserIds } });
+    const userMap = new Map(users.map((u) => [u._id, u]));
+
+    const enriched = connections.map((c) => {
+      const otherId = c.requesterId === viewerId ? c.recipientId : c.requesterId;
+      const other = userMap.get(otherId);
+      return {
+        ...c.toObject(),
+        otherUser: other
+          ? {
+              id: other._id,
+              name: other.name,
+              bio: other.bio,
+              skills: other.skills,
+            }
+          : null,
+      };
+    });
+
+    res.json({ connections: enriched });
   } catch (err) {
     next(err);
   }

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Clock } from 'lucide-react';
-import type { FeedItem } from '../../types/api';
+import { Clock, Send } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { FeedItem, Comment } from '../../types/api';
+import { getComments, addComment } from '../../api/posts';
 import { PostActions } from './PostActions';
 import { WhyThisPost } from './WhyThisPost';
 import { Badge } from '../ui/Badge';
 import { InstitutionBadge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 
 interface PostCardProps {
   item: FeedItem;
@@ -25,7 +28,33 @@ function timeAgo(dateStr: string): string {
 export function PostCard({ item, onHide }: PostCardProps) {
   const { post, explanation, score } = item;
   const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState('');
   const [hidden, setHidden] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Comments query
+  const { data: commentsData, isLoading: loadingComments } = useQuery({
+    queryKey: ['comments', post.id],
+    queryFn: () => getComments(post.id),
+    enabled: showComments,
+  });
+
+  const comments = commentsData?.comments || [];
+
+  // Add comment mutation
+  const commentMutation = useMutation({
+    mutationFn: (text: string) => addComment(post.id, text),
+    onSuccess: () => {
+      setCommentText('');
+      queryClient.invalidateQueries({ queryKey: ['comments', post.id] });
+    },
+  });
+
+  const handleAddComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+    commentMutation.mutate(commentText.trim());
+  };
 
   if (hidden) return null;
 
@@ -95,7 +124,7 @@ export function PostCard({ item, onHide }: PostCardProps) {
         </div>
       )}
 
-      {/* Divider */}
+      {/* Actions Divider */}
       <div className="border-t border-mercury-gray-50 -mx-5 px-5 pt-3">
         <PostActions
           postId={post.id}
@@ -106,6 +135,51 @@ export function PostCard({ item, onHide }: PostCardProps) {
           onComment={() => setShowComments((p) => !p)}
         />
       </div>
+
+      {/* Comments section */}
+      {showComments && (
+        <div className="border-t border-mercury-gray-50 -mx-5 px-5 pt-4 mt-3 space-y-3 bg-mercury-gray-50/50 rounded-b-2xl">
+          {/* New comment input */}
+          <form onSubmit={handleAddComment} className="flex gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Write a comment..."
+              className="mercury-input text-xs py-2"
+            />
+            <Button
+              size="sm"
+              type="submit"
+              disabled={!commentText.trim()}
+              loading={commentMutation.isPending}
+            >
+              <Send size={12} />
+            </Button>
+          </form>
+
+          {/* Comments list */}
+          {loadingComments ? (
+            <p className="text-xs text-mercury-gray-400 py-2 text-center">Loading comments...</p>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-mercury-gray-400 py-2 text-center">No comments yet.</p>
+          ) : (
+            <div className="space-y-2 pb-1">
+              {comments.map((c: Comment) => (
+                <div key={c._id} className="bg-white p-3 rounded-xl border border-mercury-gray-100 text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-mercury-black">
+                      {c.authorId.replace(/^usr-/, '')}
+                    </span>
+                    <span className="text-[10px] text-mercury-gray-400">{timeAgo(c.createdAt)}</span>
+                  </div>
+                  <p className="text-mercury-gray-700">{c.text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }
