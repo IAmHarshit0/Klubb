@@ -204,7 +204,12 @@ export const DEMO_USERS: DemoUser[] = [
   { id: 'usr-faculty-001', name: 'Dr. Elena Vance', role: 'Campus Member — Faculty & Supervisor', demoKey: 'faculty-elena' },
   // 3. Super Admins of Campus
   { id: 'usr-admin-001', name: 'Dean Robert Sterling', role: 'Super Admin — Academic Affairs', demoKey: 'admin-robert' },
+  { id: 'usr-admin-northstar-001', name: 'Dr. Amara Okafor', role: 'Super Admin — Northstar Institute', demoKey: 'admin-northstar' },
   // 4. Roles Created by Super Admins (Delegated Officers)
   { id: 'usr-officer-001', name: 'Sarah Jenkins', role: 'Verification Officer (Super Admin Role)', demoKey: 'officer-sarah' },
+  { id: 'usr-officer-northstar-001', name: 'Noah Williams', role: 'Community Lead (Super Admin Role)', demoKey: 'officer-northstar' },
+  // 5. Multiple affiliations and company representatives
+  { id: 'usr-alumnus-multi-001', name: 'Taylor Morgan', role: 'Alumnus — 2 Verified Institutions', demoKey: 'alumnus-multiple-institutions' },
+  { id: 'usr-dual-role-001', name: 'Riley Chen', role: 'Alumnus & Student — 2 Institutions', demoKey: 'alumnus-and-student' },
+  { id: 'usr-company-rep-001', name: 'Avery Brooks', role: 'Company Representative — Unverified', demoKey: 'company-representative' },
 ];
-

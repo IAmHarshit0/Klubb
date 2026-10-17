@@ -32,7 +32,7 @@ React 18 + TypeScript + Vite (Port 5173)
       REST & Socket.IO (Proxy)
         ▼
 Node.js + Express + Socket.IO (Port 4000)
-  ├── Feed (For You, Alumni, Students, Following)
+  ├── Feed (For You, Alumni, Students)
   ├── Discovery (Structured Filters, People Search)
   ├── Institutions & Communities (Tree Hierarchy, Announcements)
   ├── Connections & Real-time Messaging (Socket.IO + Gatekeeper)
@@ -57,6 +57,17 @@ cd frontend
 npm install
 npm run dev   # Starts Vite on http://localhost:5173
 ```
+
+Run MongoDB and the backend before starting the frontend. If Vite reports
+`ECONNREFUSED 127.0.0.1:4000`, the API is not listening: start MongoDB, then run
+`npm run dev` from `backend` and confirm `http://localhost:4000/health` responds.
+To use a backend on another host or port, set `VITE_API_PROXY_TARGET` in
+`frontend/.env` and restart Vite.
+
+Student interests can be added or removed from **My Profile → Your interests**.
+The seeded demo users also include multiple verified institution affiliations,
+dual alumnus/student affiliations, super admins and their delegated roles, and
+an unverified company representative.
 
 ## MVP Acceptance Criteria
 - A seeded institution contains students, alumni, groups, and posts.

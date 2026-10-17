@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getMe,
   updateFeedPreferences,
   updateConnectionPreferences,
   resetInterests,
+  updateInterests,
 } from '../api/users';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { InstitutionBadge, EmploymentBadge } from '../components/ui/Badge';
 import { PageSpinner } from '../components/ui/Spinner';
-import { Sliders, Shield, RotateCcw, UserCheck, Sparkles, Building, Briefcase } from 'lucide-react';
+import { RotateCcw, UserCheck, Building, Briefcase, X } from 'lucide-react';
 
 export function MyProfilePage() {
   const { toast } = useToast();
@@ -22,6 +23,8 @@ export function MyProfilePage() {
   });
 
   const user = data?.user;
+  const [interests, setInterests] = useState<string[]>([]);
+  const [interestDraft, setInterestDraft] = useState('');
 
   // Local state for toggles
   const [mentorship, setMentorship] = useState(false);
@@ -29,6 +32,10 @@ export function MyProfilePage() {
   const [questions, setQuestions] = useState(false);
   const [pauseRequests, setPauseRequests] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (user) setInterests(user.interests || []);
+  }, [user?.id, user?.interests]);
 
   // Sync state once data loads
   if (user && !initialized) {
@@ -55,14 +62,24 @@ export function MyProfilePage() {
     onError: (e: any) => toast(e.message, 'error'),
   });
 
-  // Reset inferred interests
+  // Clear saved interests
   const resetInterestsMutation = useMutation({
     mutationFn: resetInterests,
     onSuccess: () => {
+      setInterests([]);
       queryClient.invalidateQueries({ queryKey: ['me'] });
-      toast('Inferred interests reset to default state', 'success');
+      toast('Interests cleared', 'success');
     },
     onError: (e: any) => toast(e.message, 'error'),
+  });
+
+  const updateInterestsMutation = useMutation({
+    mutationFn: updateInterests,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['me'] });
+      toast('Interests saved', 'success');
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
   });
 
   if (isLoading || !user) return <PageSpinner />;
@@ -145,6 +162,64 @@ export function MyProfilePage() {
         </div>
       </div>
 
+      <section className="mercury-card p-6 mb-8">
+        <div className="mb-4">
+          <h2 className="text-base font-bold text-mercury-black">Your interests</h2>
+          <p className="text-xs text-mercury-gray-500 mt-1">
+            Add topics you care about to personalize your feed and help people discover you.
+          </p>
+        </div>
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const interest = interestDraft.trim();
+            if (!interest || interests.some((saved) => saved.toLowerCase() === interest.toLowerCase())) {
+              return;
+            }
+            setInterests((saved) => [...saved, interest]);
+            setInterestDraft('');
+          }}
+        >
+          <input
+            value={interestDraft}
+            onChange={(event) => setInterestDraft(event.target.value)}
+            placeholder="e.g. AI, fintech, design"
+            aria-label="Add an interest"
+            className="mercury-input flex-1"
+          />
+          <Button type="submit" variant="secondary" disabled={!interestDraft.trim()}>
+            Add
+          </Button>
+        </form>
+        <div className="flex flex-wrap gap-2 mt-4">
+          {interests.length > 0 ? interests.map((interest) => (
+            <span key={interest} className="inline-flex items-center gap-1 rounded-full bg-mercury-gray-100 px-3 py-1 text-xs font-medium text-mercury-gray-700">
+              {interest}
+              <button
+                type="button"
+                onClick={() => setInterests((saved) => saved.filter((item) => item !== interest))}
+                aria-label={`Remove ${interest}`}
+                className="rounded-full hover:text-red-600"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )) : (
+            <p className="text-xs text-mercury-gray-400">No interests added yet.</p>
+          )}
+        </div>
+        <div className="flex justify-end mt-5">
+          <Button
+            size="sm"
+            onClick={() => updateInterestsMutation.mutate(interests)}
+            loading={updateInterestsMutation.isPending}
+          >
+            Save Interests
+          </Button>
+        </div>
+      </section>
+
       {/* Connection Preferences Panel */}
       <div className="mercury-card p-6 mb-8">
         <div className="flex items-center justify-between mb-6">
@@ -221,15 +296,15 @@ export function MyProfilePage() {
         </div>
       </div>
 
-      {/* Privacy & Inferred Signals Reset */}
+      {/* Interest reset */}
       <div className="mercury-card p-6 border-mercury-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <RotateCcw size={18} className="text-mercury-gray-600" />
             <div>
-              <h3 className="text-sm font-bold text-mercury-black">Reset Behavioral Personalization</h3>
+              <h3 className="text-sm font-bold text-mercury-black">Clear your interests</h3>
               <p className="text-xs text-mercury-gray-500">
-                Clear all algorithmically inferred topics and feed weights back to clean cold-start.
+                Remove the interests saved on your profile and used to personalize your feed.
               </p>
             </div>
           </div>
@@ -239,7 +314,7 @@ export function MyProfilePage() {
             onClick={() => resetInterestsMutation.mutate()}
             loading={resetInterestsMutation.isPending}
           >
-            Reset Interests
+            Clear Interests
           </Button>
         </div>
       </div>

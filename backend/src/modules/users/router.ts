@@ -147,6 +147,30 @@ usersRouter.get("/me/interests", authenticateUser, async (req: Request, res: Res
   }
 });
 
+// PATCH /api/me/interests
+usersRouter.patch("/me/interests", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { interests } = req.body;
+    if (!Array.isArray(interests) || interests.some((interest) => typeof interest !== "string")) {
+      return next(new AppError("Interests must be an array of strings", 400));
+    }
+
+    const normalizedInterests = Array.from(
+      new Set(interests.map((interest: string) => interest.trim()).filter(Boolean))
+    );
+    const user = await User.findByIdAndUpdate(
+      req.user!._id,
+      { interests: normalizedInterests },
+      { new: true }
+    );
+
+    if (!user) return next(new AppError("User not found", 404));
+    res.json({ message: "Interests updated", interests: user.interests });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/me/interests/reset
 usersRouter.post("/me/interests/reset", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {

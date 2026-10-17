@@ -32,6 +32,10 @@ export async function resetInterests(): Promise<void> {
   await api.post('/me/interests/reset');
 }
 
+export async function updateInterests(interests: string[]): Promise<void> {
+  await api.patch('/me/interests', { interests });
+}
+
 export async function getConnectionPreferences(): Promise<{
   availableForMentorship: boolean;
   availableForReferrals: boolean;

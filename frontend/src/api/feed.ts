@@ -1,7 +1,7 @@
 import { api } from './client';
 import type { FeedResponse } from '../types/api';
 
-export type FeedTab = 'for-you' | 'alumni' | 'students' | 'following';
+export type FeedTab = 'for-you' | 'alumni' | 'students';
 export type FeedMode = 'baseline' | 'reranked';
 
 export interface FeedParams {
