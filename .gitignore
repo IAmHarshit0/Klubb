@@ -1,1 +1,58 @@
-.git
+# Dependencies
+node_modules/
+*/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+out/
+.next/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Model and reranker cache
+.cache/
+*/.cache/
+
+
+# Database and SQLite
+*.db
+*.sqlite
+*.sqlite3
+campus_network.db
+
+# Python artifacts (legacy/fallback)
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and runtime data
+logs/
+*.log
+*.tmp
+
+# IDE and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
