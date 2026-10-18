@@ -71,7 +71,7 @@ export function PostCard({ item, onHide }: PostCardProps) {
         <div className="flex items-start gap-3">
           {/* Avatar */}
           <Link to={`/profile/${post.author.id}`} className="flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-mercury-gray-200 to-mercury-gray-300 flex items-center justify-center text-sm font-bold text-mercury-gray-700 hover:ring-2 hover:ring-mercury-gray-200 transition-all">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-neutral-900 to-neutral-700 text-white flex items-center justify-center text-xs font-bold shadow-sm ring-1 ring-black/5 hover:ring-neutral-400 transition-all">
               {post.author.name.charAt(0)}
             </div>
           </Link>

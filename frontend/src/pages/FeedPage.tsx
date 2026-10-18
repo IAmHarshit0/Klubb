@@ -86,9 +86,7 @@ export function FeedPage() {
       {/* Feed tabs */}
       <FeedTabs
         activeTab={tab}
-        activeMode={mode}
         onTabChange={handleTabChange}
-        onModeChange={handleModeChange}
       />
 
       {/* Feed content */}
