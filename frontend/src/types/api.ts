@@ -164,7 +164,7 @@ export interface DiscoveryPerson {
   skills: string[];
   affiliations: Affiliation[];
   employmentClaims: EmploymentClaim[];
-  availability: Availability;
+  availability?: Availability;
 }
 
 export interface Organisation {

@@ -24,18 +24,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     if (!userId) return;
 
-    const defaultUrl =
-      typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://127.0.0.1:4000'
-        : '/';
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || defaultUrl;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
     const socket = io(socketUrl, {
       auth: { userId },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
 
@@ -49,9 +43,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socketRef.current = socket;
 
     return () => {
-      if (socket.connected) {
-        socket.disconnect();
-      }
+      socket.disconnect();
       socketRef.current = null;
       setIsConnected(false);
     };

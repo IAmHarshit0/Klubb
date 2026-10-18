@@ -29,4 +29,28 @@ describe("Profile interests", () => {
     expect(response.status).toBe(400);
     expect(response.body.error.message).toBe("Interests must be an array of strings");
   });
+
+  it("restricts availability settings to verified alumni", async () => {
+    const studentProfile = await request(app)
+      .get("/api/me")
+      .set("X-User-Id", "usr-student-001");
+    expect(studentProfile.status).toBe(200);
+    expect(studentProfile.body.user).not.toHaveProperty("connectionPreferences");
+
+    const studentPreferences = await request(app)
+      .get("/api/me/connection-preferences")
+      .set("X-User-Id", "usr-student-001");
+    expect(studentPreferences.status).toBe(403);
+
+    const studentUpdate = await request(app)
+      .patch("/api/me/connection-preferences")
+      .set("X-User-Id", "usr-student-001")
+      .send({ availableForMentorship: false });
+    expect(studentUpdate.status).toBe(403);
+
+    const alumniPreferences = await request(app)
+      .get("/api/me/connection-preferences")
+      .set("X-User-Id", "usr-alumnus-001");
+    expect(alumniPreferences.status).toBe(200);
+  });
 });

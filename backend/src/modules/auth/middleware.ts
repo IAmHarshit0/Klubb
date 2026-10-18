@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { User, IUser } from "../../shared/models.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../shared/errors.js";
+import { hasVerifiedAlumniAffiliation } from "../../shared/permissions.js";
 
 declare global {
   namespace Express {
@@ -34,6 +35,25 @@ export async function authenticateUser(
 
   req.user = user;
   next();
+}
+
+export async function requireVerifiedAlumnus(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> {
+  if (!req.user) {
+    return next(new AppError("User not found or unauthenticated", 401));
+  }
+
+  try {
+    if (!(await hasVerifiedAlumniAffiliation(req.user._id))) {
+      return next(new AppError("This feature is available to verified alumni only", 403));
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function optionalAuth(

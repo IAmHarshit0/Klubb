@@ -6,14 +6,14 @@ import type { PeopleSearchParams } from '../api/discovery';
 import { PersonCard } from '../components/discovery/PersonCard';
 import { FilterChips } from '../components/discovery/FilterChips';
 import { Input } from '../components/ui/Input';
-import { SkeletonCard } from '../components/ui/Spinner';
+import { PageSpinner, SkeletonCard } from '../components/ui/Spinner';
 import { SearchEmptyState } from '../components/ui/EmptyState';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Input';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../context/AuthContext';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 import type { Connection } from '../types/api';
 
 const FILTER_FIELDS = [
@@ -25,7 +25,7 @@ const FILTER_FIELDS = [
 
 export function DiscoveryPage() {
   const { toast } = useToast();
-  const { userId } = useAuth();
+  const { userId, isLoading: authLoading, isVerifiedAlumnus } = useAuth();
 
   // Search state
   const [query, setQuery] = useState('');
@@ -53,13 +53,15 @@ export function DiscoveryPage() {
   const hasSearch = Object.values(searchParams).some(Boolean);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['discover', 'people', searchParams],
+    queryKey: ['discover', 'people', userId, searchParams],
     queryFn: () => discoverPeople(searchParams),
+    enabled: isVerifiedAlumnus && !authLoading,
   });
 
   const { data: connectionsData } = useQuery({
     queryKey: ['connections', userId],
     queryFn: () => getConnections(),
+    enabled: isVerifiedAlumnus && !authLoading,
   });
 
   const getConnectionState = useCallback(
@@ -122,6 +124,20 @@ export function DiscoveryPage() {
     label: key,
     value,
   }));
+
+  if (authLoading) return <PageSpinner />;
+
+  if (!isVerifiedAlumnus) {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-20 text-center">
+        <ShieldAlert size={28} className="mx-auto mb-4 text-mercury-gray-400" />
+        <h1 className="text-xl font-bold text-mercury-black mb-2">Alumni-only feature</h1>
+        <p className="text-sm text-mercury-gray-500">
+          Professional discovery is available to members with an active, institution-verified alumni affiliation.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">

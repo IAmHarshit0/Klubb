@@ -12,13 +12,15 @@ import { Button } from '../components/ui/Button';
 import { InstitutionBadge, EmploymentBadge } from '../components/ui/Badge';
 import { PageSpinner } from '../components/ui/Spinner';
 import { RotateCcw, UserCheck, Building, Briefcase, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export function MyProfilePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { userId, isVerifiedAlumnus } = useAuth();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['me'],
+    queryKey: ['me', userId],
     queryFn: getMe,
   });
 
@@ -31,20 +33,17 @@ export function MyProfilePage() {
   const [referrals, setReferrals] = useState(false);
   const [questions, setQuestions] = useState(false);
   const [pauseRequests, setPauseRequests] = useState(false);
-  const [initialized, setInitialized] = useState(false);
-
   useEffect(() => {
     if (user) setInterests(user.interests || []);
   }, [user?.id, user?.interests]);
 
-  // Sync state once data loads
-  if (user && !initialized) {
+  useEffect(() => {
+    if (!user) return;
     setMentorship(!!user.connectionPreferences?.availableForMentorship);
     setReferrals(!!user.connectionPreferences?.availableForReferrals);
     setQuestions(!!user.connectionPreferences?.availableForQuestions);
     setPauseRequests(!!user.connectionPreferences?.pauseIncomingRequests);
-    setInitialized(true);
-  }
+  }, [user?.id, user?.connectionPreferences]);
 
   // Update connection preferences
   const updateConnPrefMutation = useMutation({
@@ -221,6 +220,7 @@ export function MyProfilePage() {
       </section>
 
       {/* Connection Preferences Panel */}
+      {isVerifiedAlumnus ? (
       <div className="mercury-card p-6 mb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
@@ -295,6 +295,14 @@ export function MyProfilePage() {
           </label>
         </div>
       </div>
+      ) : (
+        <div className="mercury-card p-6 mb-8">
+          <h2 className="text-base font-bold text-mercury-black">Discovery & Availability</h2>
+          <p className="text-xs text-mercury-gray-500 mt-1">
+            These settings are available to members with an active, institution-verified alumni affiliation.
+          </p>
+        </div>
+      )}
 
       {/* Interest reset */}
       <div className="mercury-card p-6 border-mercury-gray-200">
