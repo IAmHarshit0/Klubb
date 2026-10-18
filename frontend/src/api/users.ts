@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { User } from '../types/api';
+import type { TopicMapEntry, User } from '../types/api';
 
 export async function getMe(): Promise<{ user: User }> {
   const response = await api.get<{ user: User }>('/me');
@@ -34,6 +34,18 @@ export async function resetInterests(): Promise<void> {
 
 export async function updateInterests(interests: string[]): Promise<void> {
   await api.patch('/me/interests', { interests });
+}
+
+export async function getTopicMap(): Promise<{
+  topicMap: TopicMapEntry[];
+  mutedTopicIds: string[];
+}> {
+  const response = await api.get<{ topicMap: TopicMapEntry[]; mutedTopicIds: string[] }>('/me/topic-map');
+  return response.data;
+}
+
+export async function resetTopicMap(): Promise<void> {
+  await api.post('/me/topic-map/reset');
 }
 
 export async function getConnectionPreferences(): Promise<{

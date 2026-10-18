@@ -2,16 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getMe,
+  getTopicMap,
   updateFeedPreferences,
   updateConnectionPreferences,
   resetInterests,
+  resetTopicMap,
   updateInterests,
 } from '../api/users';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { InstitutionBadge, EmploymentBadge } from '../components/ui/Badge';
 import { PageSpinner } from '../components/ui/Spinner';
-import { RotateCcw, UserCheck, Building, Briefcase, X } from 'lucide-react';
+import { RotateCcw, UserCheck, Building, Briefcase, X, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function MyProfilePage() {
@@ -22,6 +24,16 @@ export function MyProfilePage() {
   const { data, isLoading } = useQuery({
     queryKey: ['me', userId],
     queryFn: getMe,
+  });
+
+  const {
+    data: topicMapData,
+    isLoading: topicMapLoading,
+    isError: topicMapIsError,
+    error: topicMapError,
+  } = useQuery({
+    queryKey: ['topic-map', userId],
+    queryFn: getTopicMap,
   });
 
   const user = data?.user;
@@ -67,6 +79,7 @@ export function MyProfilePage() {
     onSuccess: () => {
       setInterests([]);
       queryClient.invalidateQueries({ queryKey: ['me'] });
+      queryClient.invalidateQueries({ queryKey: ['topic-map', userId] });
       toast('Interests cleared', 'success');
     },
     onError: (e: any) => toast(e.message, 'error'),
@@ -76,7 +89,33 @@ export function MyProfilePage() {
     mutationFn: updateInterests,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['me'] });
+      queryClient.invalidateQueries({ queryKey: ['topic-map', userId] });
       toast('Interests saved', 'success');
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  });
+
+  const resetTopicMapMutation = useMutation({
+    mutationFn: resetTopicMap,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['topic-map', userId] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      toast('Inferred topic signals reset', 'success');
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  });
+
+  const muteTopicMutation = useMutation({
+    mutationFn: async (topic: string) => {
+      const mutedTopics = new Set(topicMapData?.mutedTopicIds || []);
+      if (mutedTopics.has(topic)) mutedTopics.delete(topic);
+      else mutedTopics.add(topic);
+      await updateFeedPreferences({ mutedTopicIds: [...mutedTopics] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['topic-map', userId] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      toast('Topic feed preference saved', 'success');
     },
     onError: (e: Error) => toast(e.message, 'error'),
   });
@@ -217,6 +256,76 @@ export function MyProfilePage() {
             Save Interests
           </Button>
         </div>
+      </section>
+
+      <section className="mercury-card p-6 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-base font-bold text-mercury-black">Your Campus Topic Map</h2>
+            <p className="text-xs text-mercury-gray-500 mt-1">
+              Interest signals from follows, searches, saves, reactions, comments, and your published post topics decay over time.
+              Private messages are never used.
+            </p>
+            <p className="text-xs text-mercury-gray-400 mt-1">
+              Resetting clears inferred activity; your profile interests, skills, and topic follows remain.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => resetTopicMapMutation.mutate()}
+            loading={resetTopicMapMutation.isPending}
+            disabled={
+              topicMapLoading ||
+              Boolean(topicMapData && !topicMapData.topicMap.some((entry) => entry.hasInferredSignals))
+            }
+          >
+            Reset Inferred Topics
+          </Button>
+        </div>
+
+        {topicMapLoading ? (
+          <p className="text-xs text-mercury-gray-400">Loading your topic map...</p>
+        ) : topicMapIsError ? (
+          <p className="text-xs text-red-600">
+            Could not load your topic map: {topicMapError instanceof Error ? topicMapError.message : 'Please try again.'}
+          </p>
+        ) : topicMapData?.topicMap.length ? (
+          <div className="flex flex-wrap gap-2.5">
+            {topicMapData.topicMap.map(({ topic, score, shortTermWeight, lastActive, muted }) => (
+              <div
+                key={topic}
+                title={lastActive ? `Last active ${new Date(lastActive).toLocaleDateString()}` : 'From your profile'}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
+                  muted ? 'border-mercury-gray-200 bg-mercury-gray-50 opacity-70' : 'border-mercury-gray-200 bg-white'
+                }`}
+              >
+                <span className="text-sm font-semibold text-mercury-black capitalize">{topic}</span>
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-mercury-gray-100 text-mercury-gray-600">
+                  {(score * 100).toFixed(0)}%
+                </span>
+                {shortTermWeight > 0.4 && (
+                  <span className="text-[10px] text-blue-600 font-bold">Trending</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => muteTopicMutation.mutate(topic)}
+                  disabled={muteTopicMutation.isPending}
+                  aria-label={`${muted ? 'Unmute' : 'Mute'} ${topic} in feed`}
+                  title={`${muted ? 'Unmute' : 'Mute'} this topic in your feed`}
+                  className="text-mercury-gray-400 hover:text-mercury-black disabled:opacity-50"
+                >
+                  <VolumeX size={14} />
+                </button>
+                {muted && <span className="text-[10px] text-mercury-gray-500">Muted</span>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-mercury-gray-400">
+            No topic signals yet. Follow a topic, search for something, or interact with a post that has topic labels.
+          </p>
+        )}
       </section>
 
       {/* Connection Preferences Panel */}

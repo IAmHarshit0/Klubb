@@ -433,6 +433,54 @@ const FollowSchema = new Schema<IFollow>(
 );
 FollowSchema.index({ followerId: 1, targetType: 1, targetId: 1 }, { unique: true });
 
+// --- User Topic Interests ---
+export interface IUserTopicSignal {
+  eventId: string;
+  signalType: "save" | "comment" | "search" | "like" | "hide" | "post";
+  weight: number;
+  decayRate: number;
+  occurredAt: Date;
+}
+
+export interface IUserTopicInterest {
+  _id: string;
+  userId: string;
+  topic: string;
+  longTermWeight: number;
+  shortTermWeight: number;
+  lastInteractedAt: Date;
+  signals: IUserTopicSignal[];
+}
+
+const UserTopicSignalSchema = new Schema<IUserTopicSignal>(
+  {
+    eventId: { type: String, required: true },
+    signalType: {
+      type: String,
+      enum: ["save", "comment", "search", "like", "hide", "post"],
+      required: true,
+    },
+    weight: { type: Number, required: true },
+    decayRate: { type: Number, required: true },
+    occurredAt: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const UserTopicInterestSchema = new Schema<IUserTopicInterest>(
+  {
+    _id: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
+    topic: { type: String, required: true },
+    longTermWeight: { type: Number, default: 0 },
+    shortTermWeight: { type: Number, default: 0 },
+    lastInteractedAt: { type: Date, default: Date.now },
+    signals: { type: [UserTopicSignalSchema], default: [] },
+  },
+  { _id: false }
+);
+UserTopicInterestSchema.index({ userId: 1, topic: 1 }, { unique: true });
+
 // --- User Feed Preferences ---
 export interface IUserFeedPreferences {
   _id: string;
@@ -646,6 +694,7 @@ export const Conversation = mongoose.model<IConversation>("Conversation", Conver
 export const Message = mongoose.model<IMessage>("Message", MessageSchema);
 export const Report = mongoose.model<IReport>("Report", ReportSchema);
 export const Follow = mongoose.model<IFollow>("Follow", FollowSchema);
+export const UserTopicInterest = mongoose.model<IUserTopicInterest>("UserTopicInterest", UserTopicInterestSchema);
 export const UserFeedPreferences = mongoose.model<IUserFeedPreferences>("UserFeedPreferences", UserFeedPreferencesSchema);
 export const UserConnectionPreferences = mongoose.model<IUserConnectionPreferences>("UserConnectionPreferences", UserConnectionPreferencesSchema);
 export const Organisation = mongoose.model<IOrganisation>("Organisation", OrganisationSchema);
@@ -654,4 +703,3 @@ export const RoleDefinition = mongoose.model<IRoleDefinition>("RoleDefinition", 
 export const RoleAssignment = mongoose.model<IRoleAssignment>("RoleAssignment", RoleAssignmentSchema);
 export const OrganisationRepresentative = mongoose.model<IOrganisationRepresentative>("OrganisationRepresentative", OrganisationRepresentativeSchema);
 export const AuditEvent = mongoose.model<IAuditEvent>("AuditEvent", AuditEventSchema);
-

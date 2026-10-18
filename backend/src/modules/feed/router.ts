@@ -17,6 +17,7 @@ import {
   ScoredPost,
 } from "./ranking.js";
 import { config } from "../../config/index.js";
+import { getUserTopicMap, normalizeTopic } from "../../shared/topic-interests.js";
 
 export const feedRouter = Router();
 
@@ -34,13 +35,20 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
       follows.filter((f) => f.targetType === "user").map((f) => f.targetId)
     );
     const followedTopicLabels = new Set(
-      follows.filter((f) => f.targetType === "topic").map((f) => f.targetId.toLowerCase())
+      follows.filter((f) => f.targetType === "topic").map((f) => normalizeTopic(f.targetId))
     );
 
     // Muted authors and topics
     const prefs = await UserFeedPreferences.findOne({ userId: viewer._id });
     const mutedAuthors = new Set(prefs?.mutedAuthorIds || []);
-    const mutedTopics = new Set((prefs?.mutedTopicIds || []).map((t) => t.toLowerCase()));
+    const mutedTopics = new Set((prefs?.mutedTopicIds || []).map(normalizeTopic));
+    const { topicMap } = await getUserTopicMap(
+      viewer,
+      new Date(),
+      follows,
+      prefs?.mutedTopicIds || []
+    );
+    const topicScores = new Map(topicMap.map((entry) => [entry.topic, entry.score]));
 
     // Hidden posts
     const hiddenInteractions = await PostInteraction.find({
@@ -64,7 +72,7 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
     for (const post of candidatePool) {
       if (hiddenPostIds.has(post._id)) continue;
       if (mutedAuthors.has(post.authorId)) continue;
-      if (post.topicLabels.some((tl) => mutedTopics.has(tl.toLowerCase()))) continue;
+      if (post.topicLabels.some((tl) => mutedTopics.has(normalizeTopic(tl)))) continue;
 
       const isViewable = await canViewPost(viewer, post);
       if (!isViewable) continue;
@@ -94,7 +102,7 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
       } else if (tab === "following") {
         const matchesAuthor = followedUserIds.has(post.authorId);
         const matchesTopic = post.topicLabels.some((l) =>
-          followedTopicLabels.has(l.toLowerCase())
+          followedTopicLabels.has(normalizeTopic(l))
         );
         if (!matchesAuthor && !matchesTopic) continue;
       }
@@ -107,15 +115,22 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
       const affs = authorAffiliationCache[post.authorId] || [];
       const isFollowedAuthor = followedUserIds.has(post.authorId);
       const isFollowedTopic = post.topicLabels.some((l) =>
-        followedTopicLabels.has(l.toLowerCase())
+        followedTopicLabels.has(normalizeTopic(l))
       );
 
-      const scoreResult = computeBaselineScore(post, viewer, affs, isFollowedAuthor, isFollowedTopic);
+      const dynamicScoreResult = computeBaselineScore(
+        post,
+        viewer,
+        affs,
+        isFollowedAuthor,
+        isFollowedTopic,
+        topicScores
+      );
 
       return {
         post,
-        score: scoreResult.score,
-        explanation: scoreResult.explanation,
+        score: dynamicScoreResult.score,
+        explanation: dynamicScoreResult.explanation,
       };
     });
 

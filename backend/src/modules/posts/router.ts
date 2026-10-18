@@ -4,6 +4,7 @@ import { authenticateUser } from "../auth/middleware.js";
 import { Post, Comment, PostInteraction, Affiliation } from "../../shared/models.js";
 import { canViewPost, canPostToAudience } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
+import { recordTopicSignal } from "../../shared/topic-interests.js";
 
 export const postsRouter = Router();
 
@@ -15,6 +16,12 @@ postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response,
     if (!text || typeof text !== "string" || text.trim().length === 0) {
       return next(new AppError("Post text is required", 400));
     }
+    if (!Array.isArray(topicLabels) || topicLabels.some((label: unknown) => typeof label !== "string")) {
+      return next(new AppError("Topic labels must be an array of strings", 400));
+    }
+    const normalizedTopicLabels = [...new Set(
+      topicLabels.map((label: string) => label.trim().slice(0, 80)).filter(Boolean)
+    )];
 
     let targetInstId = institutionId;
     if (audienceType === "campus" && !targetInstId) {
@@ -35,11 +42,16 @@ postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response,
       audienceType,
       audienceId,
       institutionId: targetInstId,
-      topicLabels,
+      topicLabels: normalizedTopicLabels,
       createdAt: new Date(),
     });
 
     await post.save();
+    await Promise.all(
+      normalizedTopicLabels.map((topic: string) =>
+        recordTopicSignal(req.user!._id, topic, "post", `post:${post._id}`, post.createdAt)
+      )
+    );
     res.status(201).json({ post });
   } catch (err) {
     next(err);
@@ -68,7 +80,7 @@ postsRouter.get("/posts/:postId", authenticateUser, async (req: Request, res: Re
 // POST /api/posts/:postId/interactions (like/save/hide)
 postsRouter.post("/posts/:postId/interactions", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { type } = req.body;
+    const { type } = req.body as { type: "like" | "save" | "hide" };
     if (!["like", "save", "hide"].includes(type)) {
       return next(new AppError("Invalid interaction type. Must be like, save, or hide", 400));
     }
@@ -83,12 +95,25 @@ postsRouter.post("/posts/:postId/interactions", authenticateUser, async (req: Re
       return next(new AppError("Cannot interact with inaccessible post", 403));
     }
 
-    // Idempotent upsert
-    await PostInteraction.findOneAndUpdate(
+    // Idempotent upsert; only a newly created interaction adds an interest signal.
+    const interactionResult = await PostInteraction.updateOne(
       { userId: req.user!._id, postId: post._id, type },
       { $setOnInsert: { _id: `act-${crypto.randomBytes(6).toString("hex")}`, createdAt: new Date() } },
       { upsert: true }
     );
+
+    if (interactionResult.upsertedCount > 0) {
+      await Promise.all(
+        post.topicLabels.map((topic) =>
+          recordTopicSignal(
+            req.user!._id,
+            topic,
+            type,
+            `interaction:${req.user!._id}:${post._id}:${type}`
+          )
+        )
+      );
+    }
 
     res.json({ message: `Post interaction '${type}' recorded` });
   } catch (err) {
@@ -99,8 +124,8 @@ postsRouter.post("/posts/:postId/interactions", authenticateUser, async (req: Re
 // POST /api/posts/:postId/comments
 postsRouter.post("/posts/:postId/comments", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { text } = req.body;
-    if (!text || text.trim().length === 0) {
+    const { text } = req.body as { text?: unknown };
+    if (typeof text !== "string" || text.trim().length === 0) {
       return next(new AppError("Comment text is required", 400));
     }
 
@@ -123,6 +148,11 @@ postsRouter.post("/posts/:postId/comments", authenticateUser, async (req: Reques
     });
 
     await comment.save();
+    await Promise.all(
+      post.topicLabels.map((topic) =>
+        recordTopicSignal(req.user!._id, topic, "comment", `comment:${comment._id}`, comment.createdAt)
+      )
+    );
     res.status(201).json({ comment });
   } catch (err) {
     next(err);

@@ -10,6 +10,7 @@ import {
   UserConnectionPreferences,
 } from "../../shared/models.js";
 import { AppError } from "../../shared/errors.js";
+import { normalizeTopic, recordTopicSignal } from "../../shared/topic-interests.js";
 
 export const discoveryRouter = Router();
 
@@ -141,6 +142,17 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
         }),
       };
     });
+
+    const searchTopics = [...new Set([q, skill, role, programme]
+      .filter((topic): topic is string => Boolean(topic?.trim()))
+      .map(normalizeTopic)
+      .filter(Boolean))];
+    const searchDay = new Date().toISOString().slice(0, 10);
+    await Promise.all(
+      searchTopics.map((topic) =>
+        recordTopicSignal(viewer._id, topic, "search", `search:${topic}:${searchDay}`)
+      )
+    );
 
     res.json({ results });
   } catch (err) {

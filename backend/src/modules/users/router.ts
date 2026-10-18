@@ -6,9 +6,11 @@ import {
   EmploymentClaim,
   UserFeedPreferences,
   UserConnectionPreferences,
+  UserTopicInterest,
 } from "../../shared/models.js";
 import { canViewProfile, hasVerifiedAlumniAffiliation } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
+import { getUserTopicMap, normalizeTopic } from "../../shared/topic-interests.js";
 
 export const usersRouter = Router();
 
@@ -163,6 +165,25 @@ usersRouter.get("/me/interests", authenticateUser, async (req: Request, res: Res
   }
 });
 
+// GET /api/me/topic-map
+usersRouter.get("/me/topic-map", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json(await getUserTopicMap(req.user!));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/me/topic-map/reset
+usersRouter.post("/me/topic-map/reset", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await UserTopicInterest.deleteMany({ userId: req.user!._id });
+    res.json({ message: "Inferred topic signals reset" });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /api/me/interests
 usersRouter.patch("/me/interests", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -202,6 +223,10 @@ usersRouter.post("/me/interests/reset", authenticateUser, async (req: Request, r
 usersRouter.patch("/me/feed-preferences", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { defaultFeedMode, mutedTopicIds, mutedAuthorIds } = req.body;
+    if (mutedTopicIds !== undefined &&
+      (!Array.isArray(mutedTopicIds) || mutedTopicIds.some((topic) => typeof topic !== "string"))) {
+      return next(new AppError("Muted topics must be an array of strings", 400));
+    }
     let prefs = await UserFeedPreferences.findOne({ userId: req.user!._id });
     if (!prefs) {
       prefs = new UserFeedPreferences({
@@ -211,7 +236,12 @@ usersRouter.patch("/me/feed-preferences", authenticateUser, async (req: Request,
     }
 
     if (defaultFeedMode) prefs.defaultFeedMode = defaultFeedMode;
-    if (mutedTopicIds) prefs.mutedTopicIds = mutedTopicIds;
+    if (mutedTopicIds) {
+      const normalizedTopics = mutedTopicIds
+        .map((topic: string) => normalizeTopic(topic))
+        .filter((topic: string) => topic.length > 0);
+      prefs.mutedTopicIds = [...new Set<string>(normalizedTopics)];
+    }
     if (mutedAuthorIds) prefs.mutedAuthorIds = mutedAuthorIds;
     prefs.updatedAt = new Date();
 

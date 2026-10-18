@@ -40,6 +40,16 @@ export interface Availability {
   paused: boolean;
 }
 
+export interface TopicMapEntry {
+  topic: string;
+  score: number;
+  longTermWeight: number;
+  shortTermWeight: number;
+  lastActive: string | null;
+  muted: boolean;
+  hasInferredSignals: boolean;
+}
+
 export interface ConnectionPreferences {
   availableForMentorship: boolean;
   availableForReferrals: boolean;

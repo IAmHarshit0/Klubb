@@ -68,6 +68,11 @@ backend on another host or port, set `VITE_API_PROXY_TARGET` in `frontend/.env`
 and restart Vite.
 
 Student interests can be added or removed from **My Profile → Your interests**.
+The **Your Campus Topic Map** widget shows long-term profile interests and
+time-decayed signals from topic follows, searches, post saves/reactions, comments,
+and published post labels. Users can reset inferred signals or mute topics in
+their feed. Private messages are never used for topic inference; resetting
+inferred signals preserves declared interests, skills, and topic follows.
 The seeded demo users also include multiple verified institution affiliations,
 dual alumnus/student affiliations, super admins and their delegated roles, and
 an unverified company representative.

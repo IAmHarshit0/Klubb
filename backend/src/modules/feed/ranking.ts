@@ -11,7 +11,8 @@ export function computeBaselineScore(
   viewer: IUser,
   authorAffiliations: any[],
   isFollowedAuthor: boolean,
-  isFollowedTopic: boolean
+  isFollowedTopic: boolean,
+  topicScores?: ReadonlyMap<string, number>
 ): { score: number; explanation: string } {
   const viewerTopics = new Set([
     ...(viewer.interests || []).map((t) => t.toLowerCase()),
@@ -19,9 +20,13 @@ export function computeBaselineScore(
   ]);
 
   // 1. Topic Relevance (0.28)
-  const postTopics = (post.topicLabels || []).map((l) => l.toLowerCase());
+  const postTopics = (post.topicLabels || []).map((label) => label.trim().toLowerCase());
   const matchingTopics = postTopics.filter((t) => viewerTopics.has(t));
-  const topicRelevance = matchingTopics.length > 0 ? 1.0 : 0.1;
+  const bestTopic = postTopics.reduce<{ topic: string; score: number } | null>((best, topic) => {
+    const score = topicScores?.get(topic) ?? (viewerTopics.has(topic) ? 1 : 0.1);
+    return !best || score > best.score ? { topic, score } : best;
+  }, null);
+  const topicRelevance = bestTopic?.score ?? 0.1;
 
   // 2. Behavioural / Follows (0.20)
   const behavioural = isFollowedAuthor ? 1.0 : isFollowedTopic ? 0.8 : 0.2;
@@ -56,8 +61,8 @@ export function computeBaselineScore(
     0.05 * popularity;
 
   let explanation = "Relevant institutional discussion";
-  if (matchingTopics.length > 0) {
-    explanation = `Matches your interest in ${matchingTopics.join(", ")}`;
+  if (bestTopic && (matchingTopics.length > 0 || topicScores?.has(bestTopic.topic))) {
+    explanation = `Matches topic affinity "${bestTopic.topic}" (${Math.round(bestTopic.score * 100)}%)`;
   } else if (isFollowedAuthor) {
     explanation = "Author you follow";
   } else if (isVerifiedAuthor) {
@@ -72,9 +77,17 @@ export function computeRerankedScore(
   viewer: IUser,
   authorAffiliations: any[],
   isFollowedAuthor: boolean,
-  isFollowedTopic: boolean
+  isFollowedTopic: boolean,
+  topicScores?: ReadonlyMap<string, number>
 ): { score: number; explanation: string } {
-  const base = computeBaselineScore(post, viewer, authorAffiliations, isFollowedAuthor, isFollowedTopic);
+  const base = computeBaselineScore(
+    post,
+    viewer,
+    authorAffiliations,
+    isFollowedAuthor,
+    isFollowedTopic,
+    topicScores
+  );
 
   // Lexical query terms from viewer's profile
   const queryTerms = [
@@ -195,7 +208,7 @@ export async function rerankWithFlashRank(
         return {
           ...item,
           score: combinedScore,
-          explanation: `Cross-encoder reranked (FlashRank): highly aligned with your profile interests`,
+          explanation: `Cross-encoder reranked (FlashRank): ${item.explanation}`,
         };
       }
       return item;
@@ -205,4 +218,3 @@ export async function rerankWithFlashRank(
     return candidates;
   }
 }
-

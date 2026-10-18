@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { authenticateUser } from "../auth/middleware.js";
 import { Follow } from "../../shared/models.js";
 import { AppError } from "../../shared/errors.js";
+import { recordTopicFollow } from "../../shared/topic-interests.js";
 
 export const followsRouter = Router();
 
@@ -19,6 +20,10 @@ followsRouter.post("/follows", authenticateUser, async (req: Request, res: Respo
       { $setOnInsert: { _id: `fol-${crypto.randomBytes(6).toString("hex")}`, createdAt: new Date() } },
       { upsert: true, new: true }
     );
+
+    if (targetType === "topic") {
+      await recordTopicFollow(req.user!._id, targetId, true, follow.createdAt);
+    }
 
     res.status(201).json({ follow });
   } catch (err) {
@@ -58,6 +63,9 @@ followsRouter.delete("/follows/topic/:topicId", authenticateUser, async (req: Re
       targetType: "topic",
       targetId: req.params.topicId,
     });
+    if (follow) {
+      await recordTopicFollow(req.user!._id, follow.targetId, false);
+    }
     res.json({ message: "Unfollowed topic successfully", follow });
   } catch (err) {
     next(err);
@@ -72,6 +80,9 @@ followsRouter.delete("/follows/:followId", authenticateUser, async (req: Request
       followerId: req.user!._id,
     });
     if (!follow) return next(new AppError("Follow relationship not found", 404));
+    if (follow.targetType === "topic") {
+      await recordTopicFollow(req.user!._id, follow.targetId, false);
+    }
 
     res.json({ message: "Unfollowed successfully" });
   } catch (err) {
