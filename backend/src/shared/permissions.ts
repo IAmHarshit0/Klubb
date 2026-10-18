@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import {
   User,
   Affiliation,
@@ -64,6 +65,38 @@ export async function isInstitutionSuperAdmin(
       verificationStatus: "institution-verified",
     })
   );
+}
+
+export async function isPlatformVerifier(userId: string): Promise<boolean> {
+  if (userId === "usr-verifier-001") return true;
+  const user = await User.findById(userId);
+  return Boolean(user && ((user as any).isPlatformVerifier || user.demoKey === "platform-verifier"));
+}
+
+export async function createNotification(data: {
+  userId: string;
+  actorId?: string;
+  actorName?: string;
+  type: string;
+  title: string;
+  message: string;
+  link?: string;
+}): Promise<any> {
+  const { Notification } = await import("./models.js");
+  const notification = new Notification({
+    _id: `notif-${crypto.randomBytes(6).toString("hex")}`,
+    userId: data.userId,
+    actorId: data.actorId,
+    actorName: data.actorName,
+    type: data.type,
+    title: data.title,
+    message: data.message,
+    link: data.link,
+    read: false,
+    createdAt: new Date(),
+  });
+  await notification.save();
+  return notification;
 }
 
 export async function hasDelegatedInstitutionPermission(

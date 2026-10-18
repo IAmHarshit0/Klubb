@@ -11,6 +11,7 @@ interface ToastItem {
 
 interface ToastContextValue {
   toast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -35,7 +36,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ToastContext.Provider value={{ toast }}>
+    <ToastContext.Provider value={{ toast, showToast: toast }}>
       {children}
       {/* Toast container */}
       <div

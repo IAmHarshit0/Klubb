@@ -12,6 +12,8 @@ import { groupsRouter } from "./modules/groups/router.js";
 import { messagingRouter } from "./modules/messaging/router.js";
 import { moderationRouter } from "./modules/moderation/router.js";
 import { followsRouter } from "./modules/follows/router.js";
+import { verificationRouter } from "./modules/verification/router.js";
+import { notificationsRouter } from "./modules/notifications/router.js";
 
 export const app = express();
 
@@ -48,6 +50,8 @@ const apiRouters = [
   messagingRouter,
   moderationRouter,
   followsRouter,
+  verificationRouter,
+  notificationsRouter,
 ];
 
 for (const router of apiRouters) {

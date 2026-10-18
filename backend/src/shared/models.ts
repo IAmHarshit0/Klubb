@@ -89,7 +89,7 @@ export interface IAffiliation {
   _id: string;
   userId: string;
   institutionId: string;
-  role: "Student" | "Alumnus" | "Faculty" | "Admin";
+  role: "Student" | "Alumnus" | "Faculty" | "Admin" | "Staff" | "Researcher";
   programme?: string;
   department?: string;
   batch?: string;
@@ -700,6 +700,139 @@ const AuditEventSchema = new Schema<IAuditEvent>(
   { _id: false }
 );
 
+// --- Organization Registrations ---
+export interface IOrganizationRegistration {
+  _id: string;
+  name: string;
+  type: string;
+  website?: string;
+  country?: string;
+  officialEmail: string;
+  domain?: string;
+  description?: string;
+  evidence?: string;
+  representativeName: string;
+  representativeContact?: string;
+  status: "pending" | "under_review" | "more_info_required" | "approved" | "rejected" | "suspended" | "revoked";
+  reviewedBy?: string;
+  reviewReason?: string;
+  assignedIdentifier?: string;
+  appointedSuperAdminId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const OrganizationRegistrationSchema = new Schema<IOrganizationRegistration>(
+  {
+    _id: { type: String, required: true },
+    name: { type: String, required: true },
+    type: { type: String, default: "university" },
+    website: { type: String },
+    country: { type: String },
+    officialEmail: { type: String, required: true },
+    domain: { type: String },
+    description: { type: String },
+    evidence: { type: String },
+    representativeName: { type: String, required: true },
+    representativeContact: { type: String },
+    status: {
+      type: String,
+      enum: ["pending", "under_review", "more_info_required", "approved", "rejected", "suspended", "revoked"],
+      default: "pending",
+    },
+    reviewedBy: { type: String },
+    reviewReason: { type: String },
+    assignedIdentifier: { type: String },
+    appointedSuperAdminId: { type: String },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+// --- Affiliation Requests ---
+export interface IAffiliationRequest {
+  _id: string;
+  userId: string;
+  institutionId: string;
+  role: "Student" | "Alumnus" | "Faculty" | "Staff" | "Researcher" | "Admin";
+  programme?: string;
+  department?: string;
+  batch?: string;
+  officialEmail?: string;
+  evidence?: string;
+  status: "pending" | "approved" | "rejected" | "more_info_required";
+  reviewedBy?: string;
+  reviewReason?: string;
+  createdAt: Date;
+  reviewedAt?: Date;
+}
+
+const AffiliationRequestSchema = new Schema<IAffiliationRequest>(
+  {
+    _id: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
+    institutionId: { type: String, required: true, index: true },
+    role: { type: String, required: true },
+    programme: { type: String },
+    department: { type: String },
+    batch: { type: String },
+    officialEmail: { type: String },
+    evidence: { type: String },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "more_info_required"],
+      default: "pending",
+    },
+    reviewedBy: { type: String },
+    reviewReason: { type: String },
+    createdAt: { type: Date, default: Date.now },
+    reviewedAt: { type: Date },
+  },
+  { _id: false }
+);
+
+// --- In-App Notifications ---
+export interface INotification {
+  _id: string;
+  userId: string;
+  actorId?: string;
+  actorName?: string;
+  type:
+    | "connection_request"
+    | "connection_accepted"
+    | "connection_declined"
+    | "group_access_request"
+    | "group_access_decision"
+    | "affiliation_verified"
+    | "affiliation_rejected"
+    | "announcement"
+    | "role_assigned"
+    | "moderation_update"
+    | "message";
+  title: string;
+  message: string;
+  link?: string;
+  read: boolean;
+  createdAt: Date;
+}
+
+const NotificationSchema = new Schema<INotification>(
+  {
+    _id: { type: String, required: true },
+    userId: { type: String, required: true, index: true },
+    actorId: { type: String },
+    actorName: { type: String },
+    type: { type: String, required: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    link: { type: String },
+    read: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now, index: true },
+  },
+  { _id: false }
+);
+
 // Export Mongoose Models
 export const User = mongoose.model<IUser>("User", UserSchema);
 export const Institution = mongoose.model<IInstitution>("Institution", InstitutionSchema);
@@ -727,3 +860,7 @@ export const RoleDefinition = mongoose.model<IRoleDefinition>("RoleDefinition", 
 export const RoleAssignment = mongoose.model<IRoleAssignment>("RoleAssignment", RoleAssignmentSchema);
 export const OrganisationRepresentative = mongoose.model<IOrganisationRepresentative>("OrganisationRepresentative", OrganisationRepresentativeSchema);
 export const AuditEvent = mongoose.model<IAuditEvent>("AuditEvent", AuditEventSchema);
+export const OrganizationRegistration = mongoose.model<IOrganizationRegistration>("OrganizationRegistration", OrganizationRegistrationSchema);
+export const AffiliationRequest = mongoose.model<IAffiliationRequest>("AffiliationRequest", AffiliationRequestSchema);
+export const Notification = mongoose.model<INotification>("Notification", NotificationSchema);
+

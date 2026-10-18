@@ -70,3 +70,4 @@ function createApiClient(): AxiosInstance {
 }
 
 export const api = createApiClient();
+export const client = api;

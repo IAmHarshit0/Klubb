@@ -89,3 +89,60 @@ followsRouter.delete("/follows/:followId", authenticateUser, async (req: Request
     next(err);
   }
 });
+
+// POST /api/users/:userId/follow
+followsRouter.post("/users/:userId/follow", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetId = req.params.userId;
+    const follow = await Follow.findOneAndUpdate(
+      { followerId: req.user!._id, targetType: "user", targetId },
+      { $setOnInsert: { _id: `fol-${crypto.randomBytes(6).toString("hex")}`, createdAt: new Date() } },
+      { upsert: true, new: true }
+    );
+    res.status(201).json({ follow, message: "User followed successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/users/:userId/follow
+followsRouter.delete("/users/:userId/follow", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetId = req.params.userId;
+    await Follow.findOneAndDelete({ followerId: req.user!._id, targetType: "user", targetId });
+    res.json({ message: "User unfollowed successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/topics/:topicId/follow
+followsRouter.post("/topics/:topicId/follow", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetId = decodeURIComponent(req.params.topicId as string);
+    const follow = await Follow.findOneAndUpdate(
+      { followerId: req.user!._id, targetType: "topic", targetId },
+      { $setOnInsert: { _id: `fol-${crypto.randomBytes(6).toString("hex")}`, createdAt: new Date() } },
+      { upsert: true, new: true }
+    );
+    await recordTopicFollow(req.user!._id, targetId, true, follow.createdAt);
+    res.status(201).json({ follow, message: "Topic followed successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/topics/:topicId/follow
+followsRouter.delete("/topics/:topicId/follow", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetId = decodeURIComponent(req.params.topicId as string);
+    const follow = await Follow.findOneAndDelete({ followerId: req.user!._id, targetType: "topic", targetId });
+    if (follow) {
+      await recordTopicFollow(req.user!._id, targetId, false);
+    }
+    res.json({ message: "Topic unfollowed successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+

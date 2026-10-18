@@ -8,10 +8,14 @@ import {
   Block,
   Organisation,
   UserConnectionPreferences,
+  Institution,
+  Group,
+  Post,
+  Membership,
 } from "../../shared/models.js";
 import { AppError } from "../../shared/errors.js";
 import { normalizeTopic, recordTopicSignal } from "../../shared/topic-interests.js";
-import { hasInstitutionPermission } from "../../shared/permissions.js";
+import { hasInstitutionPermission, canViewPost } from "../../shared/permissions.js";
 
 export const discoveryRouter = Router();
 
@@ -261,3 +265,157 @@ discoveryRouter.patch("/organisations/:id/verification", authenticateUser, async
     next(err);
   }
 });
+
+// GET /api/discover/organizations (alias for organisations)
+discoveryRouter.get("/discover/organizations", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = req.query.q as string;
+    const query: any = {};
+    if (q) {
+      query.name = { $regex: q, $options: "i" };
+    }
+    const organisations = await Organisation.find(query).limit(50);
+    res.json({ organisations, organizations: organisations });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/discover/institutions
+discoveryRouter.get("/discover/institutions", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = req.query.q as string;
+    const query: any = {};
+    if (q) {
+      query.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { displayName: { $regex: q, $options: "i" } },
+        { slug: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const institutions = await Institution.find(query).limit(50);
+    const instIds = institutions.map((i) => i._id);
+
+    // Get verified member and group counts
+    const [affiliations, groups] = await Promise.all([
+      Affiliation.find({ institutionId: { $in: instIds }, status: "active", verificationStatus: "institution-verified" }),
+      Group.find({ institutionId: { $in: instIds } }),
+    ]);
+
+    const memberCountMap = new Map<string, number>();
+    for (const a of affiliations) {
+      memberCountMap.set(a.institutionId, (memberCountMap.get(a.institutionId) || 0) + 1);
+    }
+
+    const groupCountMap = new Map<string, number>();
+    for (const g of groups) {
+      groupCountMap.set(g.institutionId, (groupCountMap.get(g.institutionId) || 0) + 1);
+    }
+
+    const results = institutions.map((inst) => ({
+      _id: inst._id,
+      name: inst.name,
+      displayName: inst.displayName,
+      slug: inst.slug,
+      type: inst.type,
+      verifiedMemberCount: memberCountMap.get(inst._id) || 0,
+      groupCount: groupCountMap.get(inst._id) || 0,
+    }));
+
+    res.json({ institutions: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/discover/groups
+discoveryRouter.get("/discover/groups", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { q, institutionId, groupType } = req.query as Record<string, string>;
+    const query: any = { visibility: { $ne: "restricted" } };
+
+    if (q) {
+      query.name = { $regex: q, $options: "i" };
+    }
+    if (institutionId) {
+      query.institutionId = institutionId;
+    }
+    if (groupType) {
+      query.groupType = groupType;
+    }
+
+    const groups = await Group.find(query).limit(50);
+    const groupIds = groups.map((g) => g._id);
+
+    const memberships = await Membership.find({ groupId: { $in: groupIds }, status: "active" });
+    const countMap = new Map<string, number>();
+    for (const m of memberships) {
+      countMap.set(m.groupId, (countMap.get(m.groupId) || 0) + 1);
+    }
+
+    const myMemberships = await Membership.find({
+      userId: req.user!._id,
+      groupId: { $in: groupIds },
+      status: "active",
+    });
+    const myGroupIds = new Set(myMemberships.map((m) => m.groupId));
+
+    const results = groups.map((g) => ({
+      _id: g._id,
+      name: g.name,
+      groupType: g.groupType,
+      visibility: g.visibility,
+      institutionId: g.institutionId,
+      memberCount: countMap.get(g._id) || 0,
+      isMember: myGroupIds.has(g._id),
+    }));
+
+    res.json({ groups: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/discover/posts
+discoveryRouter.get("/discover/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { q, topic } = req.query as Record<string, string>;
+    const query: any = { audienceType: "public" };
+
+    if (q) {
+      query.text = { $regex: q, $options: "i" };
+    }
+    if (topic) {
+      query.topicLabels = { $regex: topic, $options: "i" };
+    }
+
+    const posts = await Post.find(query).sort({ createdAt: -1 }).limit(30);
+    const authorIds = [...new Set(posts.map((p) => p.authorId))];
+    const authors = await User.find({ _id: { $in: authorIds } });
+    const authorMap = new Map(authors.map((u) => [u._id, u]));
+
+    const formatted = posts.map((p) => {
+      const author = authorMap.get(p.authorId);
+      return {
+        id: p._id,
+        text: p.text,
+        media: p.media,
+        audienceType: p.audienceType,
+        topicLabels: p.topicLabels,
+        createdAt: p.createdAt,
+        author: {
+          id: author?._id || p.authorId,
+          name: author?.name || "Member",
+          role: "Member",
+          verificationStatus: "institution-verified",
+        },
+      };
+    });
+
+    res.json({ posts: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+

@@ -79,6 +79,33 @@ postsRouter.delete("/posts/:postId", authenticateUser, async (req: Request, res:
   }
 });
 
+// PATCH /api/posts/:postId
+postsRouter.patch("/posts/:postId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return next(new AppError("Post not found", 404));
+    }
+
+    if (post.authorId !== req.user!._id) {
+      return next(new AppError("You can only edit your own posts", 403));
+    }
+
+    const { text, topicLabels } = req.body;
+    if (text && typeof text === "string" && text.trim().length > 0) {
+      post.text = text.trim();
+    }
+    if (Array.isArray(topicLabels)) {
+      post.topicLabels = [...new Set(topicLabels.map((t: string) => String(t).trim()).filter(Boolean))];
+    }
+
+    await post.save();
+    res.json({ message: "Post updated successfully", post });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/posts
 postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {

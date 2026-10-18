@@ -211,6 +211,71 @@ export interface GroupAccessRequest {
   createdAt: string;
 }
 
+export interface OrganizationRegistration {
+  _id: string;
+  name: string;
+  type: string;
+  website?: string;
+  country?: string;
+  officialEmail: string;
+  domain?: string;
+  description?: string;
+  evidence?: string;
+  representativeName: string;
+  representativeContact?: string;
+  status: 'pending' | 'under_review' | 'more_info_required' | 'approved' | 'rejected' | 'suspended' | 'revoked';
+  reviewedBy?: string;
+  reviewReason?: string;
+  assignedIdentifier?: string;
+  appointedSuperAdminId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AffiliationRequest {
+  _id: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  institutionId: string;
+  institutionName?: string;
+  role: 'Student' | 'Alumnus' | 'Faculty' | 'Staff' | 'Researcher' | 'Admin';
+  programme?: string;
+  department?: string;
+  batch?: string;
+  officialEmail?: string;
+  evidence?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'more_info_required';
+  reviewedBy?: string;
+  reviewReason?: string;
+  createdAt: string;
+  reviewedAt?: string;
+}
+
+export interface AppNotification {
+  _id: string;
+  userId: string;
+  actorId?: string;
+  actorName?: string;
+  type: string;
+  title: string;
+  message: string;
+  link?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface InstitutionMetrics {
+  pendingAffiliationRequests: number;
+  verifiedStudents: number;
+  verifiedAlumni: number;
+  verifiedFacultyStaff: number;
+  otherVerifiedMembers: number;
+  totalVerifiedPeople: number;
+  activeGroups: number;
+  pendingGroupAccessRequests: number;
+}
+
 // ── Demo Users ────────────────────────────────────────────────────────────────
 export interface DemoUser {
   id: string;
@@ -220,6 +285,8 @@ export interface DemoUser {
 }
 
 export const DEMO_USERS: DemoUser[] = [
+  // 0. Campus Network Platform Verifier
+  { id: 'usr-verifier-001', name: 'Dr. Aris Thorne', role: 'Campus Network Verifier — Platform Operator', demoKey: 'platform-verifier' },
   // 1. Students
   { id: 'usr-student-001', name: 'Alex Rivera', role: 'Student — CS', demoKey: 'student-alex' },
   { id: 'usr-student-002', name: 'Jordan Lee', role: 'Student — Bioengineering', demoKey: 'student-jordan' },
@@ -240,3 +307,4 @@ export const DEMO_USERS: DemoUser[] = [
   { id: 'usr-dual-role-001', name: 'Riley Chen', role: 'Alumnus & Student — 2 Institutions', demoKey: 'alumnus-and-student' },
   { id: 'usr-company-rep-001', name: 'Avery Brooks', role: 'Company Representative — Unverified', demoKey: 'company-representative' },
 ];
+

@@ -28,8 +28,31 @@ const SIGNAL_DECAY_RATES: Record<TopicSignalType, number> = {
   post: 0.02,
 };
 
+// Canonical topic taxonomy & normalization mapping
+const TOPIC_ALIASES: Record<string, string> = {
+  postgres: "postgresql",
+  ml: "machine learning",
+  ai: "artificial intelligence",
+  backend: "backend engineering",
+  frontend: "frontend engineering",
+  "system design": "distributed systems",
+  k8s: "kubernetes",
+  js: "javascript",
+  ts: "typescript",
+  reactjs: "react",
+  golang: "go",
+  py: "python",
+  dl: "deep learning",
+  nlp: "natural language processing",
+  "web dev": "web development",
+  infra: "infrastructure",
+  cloud: "cloud computing",
+  db: "databases",
+};
+
 export function normalizeTopic(topic: string): string {
-  return topic.trim().toLowerCase().slice(0, 80);
+  const cleaned = topic.trim().toLowerCase().slice(0, 80);
+  return TOPIC_ALIASES[cleaned] || cleaned;
 }
 
 function topicInterestId(userId: string, topic: string): string {

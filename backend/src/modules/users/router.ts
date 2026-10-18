@@ -100,6 +100,58 @@ usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, nex
   }
 });
 
+// PATCH /api/me/profile
+usersRouter.patch("/me/profile", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, bio, portfolioUrl, skills, interests } = req.body;
+    const updateData: any = {};
+    if (name && typeof name === "string") updateData.name = name.trim();
+    if (bio !== undefined && typeof bio === "string") updateData.bio = bio.trim();
+    if (portfolioUrl !== undefined && typeof portfolioUrl === "string") updateData.portfolioUrl = portfolioUrl.trim();
+    if (Array.isArray(skills)) updateData.skills = skills.map((s: string) => String(s).trim()).filter(Boolean);
+    if (Array.isArray(interests)) updateData.interests = interests.map((i: string) => String(i).trim()).filter(Boolean);
+
+    const user = await User.findByIdAndUpdate(req.user!._id, { $set: updateData }, { new: true });
+    if (!user) return next(new AppError("User not found", 404));
+
+    res.json({ message: "Profile updated successfully", user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/me/privacy
+usersRouter.patch("/me/privacy", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { profileVisibility } = req.body;
+    if (!["public", "campus", "restricted"].includes(profileVisibility)) {
+      return next(new AppError("Invalid profileVisibility. Must be public, campus, or restricted", 400));
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user!._id,
+      { $set: { profileVisibility } },
+      { new: true }
+    );
+    if (!user) return next(new AppError("User not found", 404));
+
+    res.json({ message: "Privacy settings updated successfully", profileVisibility: user.profileVisibility });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/users/:userId/affiliations
+usersRouter.get("/users/:userId/affiliations", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const targetUserId = req.params.userId === "me" ? req.user!._id : req.params.userId;
+    const affiliations = await Affiliation.find({ userId: targetUserId, status: "active" });
+    res.json({ affiliations });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/users/me
 usersRouter.get("/users/me", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {

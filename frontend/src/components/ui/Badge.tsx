@@ -9,7 +9,9 @@ type BadgeVariant =
   | 'campus'
   | 'group'
   | 'public'
-  | 'neutral';
+  | 'neutral'
+  | 'default'
+  | 'secondary';
 
 interface BadgeProps {
   variant?: BadgeVariant;
@@ -46,6 +48,12 @@ const variantConfig: Record<BadgeVariant, { className: string; icon?: React.Reac
     className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
   },
   neutral: {
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md',
+  },
+  default: {
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
+  },
+  secondary: {
     className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md',
   },
 };

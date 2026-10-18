@@ -17,6 +17,12 @@ import {
   RoleAssignment,
   VerifiedMember,
 } from '../api/institutions';
+import {
+  getInstitutionMetrics,
+  getInstitutionVerificationRequests,
+  reviewAffiliationRequest,
+  submitAffiliationRequest,
+} from '../api/verification';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
@@ -38,8 +44,13 @@ import {
   Award,
   KeyRound,
   CheckCircle2,
+  XCircle,
+  GraduationCap,
+  Clock,
+  UserPlus,
+  ChevronDown,
 } from 'lucide-react';
-import type { Community, Group } from '../types/api';
+import type { Community, Group, AffiliationRequest, InstitutionMetrics } from '../types/api';
 
 export function InstitutionsPage() {
   const { userId, currentUser } = useAuth();
@@ -47,7 +58,7 @@ export function InstitutionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'communities' | 'announcements' | 'governance'>('communities');
+  const [activeTab, setActiveTab] = useState<'communities' | 'announcements' | 'governance' | 'verifications'>('communities');
   const [selectedInstId, setSelectedInstId] = useState<string>('inst-apex-001');
 
   const [createCommunityOpen, setCreateCommunityOpen] = useState(false);
@@ -76,6 +87,17 @@ export function InstitutionsPage() {
   const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
   const [selectedRoleId, setSelectedRoleId] = useState('');
 
+  // Request affiliation modal state
+  const [requestAffiliationOpen, setRequestAffiliationOpen] = useState(false);
+  const [affiliationForm, setAffiliationForm] = useState({
+    role: 'Student' as 'Student' | 'Alumnus' | 'Faculty' | 'Staff',
+    programme: '',
+    department: '',
+    batch: '',
+    officialEmail: '',
+    evidence: '',
+  });
+
   // 1. Fetch institutions
   const { data: instData, isLoading: loadingInsts } = useQuery({
     queryKey: ['institutions'],
@@ -85,6 +107,12 @@ export function InstitutionsPage() {
   const institutions = instData?.institutions || [];
   const activeInstitution = institutions.find((i) => i._id === selectedInstId) || institutions[0];
   const activeInstitutionId = activeInstitution?._id || selectedInstId;
+
+  const myAffiliation = currentUser?.affiliations?.find(
+    (a) => a.institutionId === activeInstitutionId
+  );
+  const isMyAffiliationVerified = myAffiliation?.verificationStatus === 'institution-verified';
+
   const isSuperAdmin = Boolean(currentUser?.affiliations?.some(
     (a) =>
       a.institutionId === activeInstitutionId &&
@@ -97,12 +125,15 @@ export function InstitutionsPage() {
   const hasCommunityCreationRole = currentInstitutionRoles.some(
     (role) => role.permissions.includes('create_community')
   );
+  const hasVerificationRole = isSuperAdmin || currentInstitutionRoles.some(
+    (role) => role.permissions.includes('verify_affiliation')
+  );
 
   // 2. Fetch hierarchy tree for active institution
   const { data: treeData, isLoading: loadingTree } = useQuery({
-    queryKey: ['institution-tree', activeInstitution?._id || selectedInstId],
-    queryFn: () => getInstitutionTree(activeInstitution?._id || selectedInstId),
-    enabled: !!(activeInstitution?._id || selectedInstId),
+    queryKey: ['institution-tree', activeInstitutionId],
+    queryFn: () => getInstitutionTree(activeInstitutionId),
+    enabled: !!activeInstitutionId,
   });
 
   // 3. Fetch announcements
@@ -113,9 +144,9 @@ export function InstitutionsPage() {
 
   // 4. Fetch Roles & Role Assignments for the institution
   const { data: rolesData } = useQuery({
-    queryKey: ['institution-roles', activeInstitution?._id || selectedInstId],
-    queryFn: () => getInstitutionRoles(activeInstitution?._id || selectedInstId),
-    enabled: !!(activeInstitution?._id || selectedInstId),
+    queryKey: ['institution-roles', activeInstitutionId],
+    queryFn: () => getInstitutionRoles(activeInstitutionId),
+    enabled: !!activeInstitutionId,
   });
 
   const { data: assignmentsData } = useQuery({
@@ -131,11 +162,28 @@ export function InstitutionsPage() {
     enabled: !!activeInstitutionId && isSuperAdmin,
   });
 
+  // 6. Fetch Institutional Metrics (Section 6)
+  const { data: metricsData } = useQuery({
+    queryKey: ['institution-metrics', activeInstitutionId],
+    queryFn: () => getInstitutionMetrics(activeInstitutionId),
+    enabled: !!activeInstitutionId,
+  });
+
+  // 7. Fetch Pending Affiliation Requests for Verification Officers / Super Admins
+  const { data: verifRequestsData } = useQuery({
+    queryKey: ['institution-verification-requests', activeInstitutionId],
+    queryFn: () => getInstitutionVerificationRequests(activeInstitutionId),
+    enabled: !!activeInstitutionId && hasVerificationRole,
+  });
+
   const announcements = annData?.announcements || [];
   const tree = treeData?.tree;
   const roles = rolesData?.roles || [];
   const roleAssignments = assignmentsData?.roleAssignments || [];
   const verifiedMembers = membersData?.members || [];
+  const metrics = metricsData?.metrics;
+  const affiliationRequests = verifRequestsData?.requests || [];
+  const pendingAffiliationRequests = affiliationRequests.filter((r) => r.status === 'pending');
 
   const createCommunityMutation = useMutation({
     mutationFn: (data: { name: string; suffix: string }) =>
@@ -194,6 +242,65 @@ export function InstitutionsPage() {
     onError: (e: any) => toast(e.message, 'error'),
   });
 
+  // Review affiliation request mutation
+  const reviewAffiliationMutation = useMutation({
+    mutationFn: (vars: {
+      requestId: string;
+      status: 'approved' | 'rejected' | 'more_info_required';
+      reviewReason?: string;
+    }) =>
+      reviewAffiliationRequest(vars.requestId, {
+        status: vars.status,
+        reviewReason: vars.reviewReason,
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ['institution-verification-requests', activeInstitutionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['institution-metrics', activeInstitutionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['institution-verified-members', activeInstitutionId],
+      });
+      toast(data.message || 'Affiliation review submitted successfully!', 'success');
+    },
+    onError: (e: any) => toast(e.response?.data?.message || e.message, 'error'),
+  });
+
+  // Submit affiliation request mutation
+  const submitAffiliationMutation = useMutation({
+    mutationFn: () =>
+      submitAffiliationRequest({
+        institutionId: activeInstitutionId,
+        role: affiliationForm.role,
+        programme: affiliationForm.programme || undefined,
+        department: affiliationForm.department || undefined,
+        batch: affiliationForm.batch || undefined,
+        officialEmail: affiliationForm.officialEmail || undefined,
+        evidence: affiliationForm.evidence || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['institution-verification-requests', activeInstitutionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['institution-metrics', activeInstitutionId],
+      });
+      toast('Affiliation request submitted for verification!', 'success');
+      setRequestAffiliationOpen(false);
+      setAffiliationForm({
+        role: 'Student',
+        programme: '',
+        department: '',
+        batch: '',
+        officialEmail: '',
+        evidence: '',
+      });
+    },
+    onError: (e: any) => toast(e.response?.data?.message || e.message, 'error'),
+  });
+
   const handleCreateGroup = () => {
     if (!groupName.trim()) {
       toast('Please enter a group name', 'error');
@@ -249,8 +356,30 @@ export function InstitutionsPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
+      {/* Institution Switcher (if multiple exist) */}
+      {institutions.length > 1 && (
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+          <span className="text-xs font-bold uppercase tracking-wider text-mercury-gray-400">
+            Institution:
+          </span>
+          {institutions.map((inst) => (
+            <button
+              key={inst._id}
+              onClick={() => setSelectedInstId(inst._id)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                activeInstitutionId === inst._id
+                  ? 'bg-mercury-black text-white'
+                  : 'bg-white border border-mercury-gray-200 text-mercury-gray-700 hover:bg-mercury-gray-50'
+              }`}
+            >
+              {inst.displayName || inst.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Hero */}
-      <div className="mercury-card p-8 mb-8 relative overflow-hidden">
+      <div className="mercury-card p-8 mb-6 relative overflow-hidden">
         <div
           className="mercury-blob w-64 h-64 -top-20 -right-20 opacity-30"
           style={{ animation: 'blobFloat 12s ease-in-out infinite' }}
@@ -263,6 +392,18 @@ export function InstitutionsPage() {
               <span className="spatial-label">ORGANIZING LAYER</span>
               <span className="text-mercury-gray-300">·</span>
               <span className="text-xs text-mercury-gray-500 font-medium">Campus Network v3.0</span>
+              {isMyAffiliationVerified ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200">
+                  <CheckCircle2 size={12} /> Verified {myAffiliation?.role}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setRequestAffiliationOpen(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors"
+                >
+                  <UserPlus size={12} /> Request Affiliation
+                </button>
+              )}
             </div>
 
             <h1 className="text-4xl font-black tracking-tight text-mercury-black mb-2">
@@ -275,10 +416,22 @@ export function InstitutionsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {!isMyAffiliationVerified && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setRequestAffiliationOpen(true)}
+                className="flex items-center gap-1.5 bg-white shadow-mercury-xs"
+              >
+                <GraduationCap size={15} />
+                Verify Affiliation
+              </Button>
+            )}
             {hasCommunityCreationRole && (
               <Button
                 variant="secondary"
+                size="sm"
                 onClick={() => setCreateCommunityOpen(true)}
                 className="flex items-center gap-2"
               >
@@ -288,6 +441,7 @@ export function InstitutionsPage() {
             )}
             {isSuperAdmin && (
               <Button
+                size="sm"
                 onClick={() => setCreateOpen(true)}
                 className="flex items-center gap-2"
               >
@@ -298,6 +452,7 @@ export function InstitutionsPage() {
             {isSuperAdmin && (
               <Button
                 variant="secondary"
+                size="sm"
                 onClick={() => setCreateRoleOpen(true)}
                 className="flex items-center gap-2"
               >
@@ -309,8 +464,54 @@ export function InstitutionsPage() {
         </div>
       </div>
 
+      {/* Institutional Metrics Banner (Section 6) */}
+      {metrics && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+          <div className="p-4 rounded-2xl bg-white border border-mercury-gray-200 shadow-mercury-xs">
+            <p className="text-[10px] font-bold text-mercury-gray-400 uppercase tracking-wider">
+              Total Verified
+            </p>
+            <p className="text-2xl font-black text-mercury-black mt-1">
+              {metrics.totalVerifiedPeople}
+            </p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-mercury-gray-200 shadow-mercury-xs">
+            <p className="text-[10px] font-bold text-mercury-gray-400 uppercase tracking-wider">
+              Students
+            </p>
+            <p className="text-2xl font-black text-blue-600 mt-1">
+              {metrics.verifiedStudents}
+            </p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-mercury-gray-200 shadow-mercury-xs">
+            <p className="text-[10px] font-bold text-mercury-gray-400 uppercase tracking-wider">
+              Alumni
+            </p>
+            <p className="text-2xl font-black text-emerald-600 mt-1">
+              {metrics.verifiedAlumni}
+            </p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-mercury-gray-200 shadow-mercury-xs">
+            <p className="text-[10px] font-bold text-mercury-gray-400 uppercase tracking-wider">
+              Active Groups
+            </p>
+            <p className="text-2xl font-black text-purple-600 mt-1">
+              {metrics.activeGroups}
+            </p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white border border-mercury-gray-200 shadow-mercury-xs">
+            <p className="text-[10px] font-bold text-mercury-gray-400 uppercase tracking-wider">
+              Pending Review
+            </p>
+            <p className="text-2xl font-black text-amber-600 mt-1">
+              {metrics.pendingAffiliationRequests}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Navigation tabs */}
-      <div className="flex items-center justify-between border-b border-mercury-gray-100 mb-6">
+      <div className="flex items-center justify-between border-b border-mercury-gray-100 mb-6 overflow-x-auto">
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab('communities')}
@@ -351,6 +552,23 @@ export function InstitutionsPage() {
               </span>
             )}
           </button>
+
+          {hasVerificationRole && (
+            <button
+              onClick={() => setActiveTab('verifications')}
+              className={`feed-tab flex items-center gap-2 ${
+                activeTab === 'verifications' ? 'active' : ''
+              }`}
+            >
+              <UserCheck size={15} />
+              <span>Affiliation Queue</span>
+              {pendingAffiliationRequests.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                  {pendingAffiliationRequests.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -661,6 +879,143 @@ export function InstitutionsPage() {
         </div>
       )}
 
+      {/* Tab 4: Institutional Affiliation Queue (Super Admin / Verification Officer) */}
+      {activeTab === 'verifications' && hasVerificationRole && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] tracking-widest font-black uppercase text-amber-800">
+                  Affiliation Verification
+                </span>
+                <span className="text-amber-300">·</span>
+                <span className="text-xs text-amber-700 font-medium">Campus Network Spec §4</span>
+              </div>
+              <h2 className="text-lg font-bold text-mercury-black">
+                Student & Alumni Verification Queue
+              </h2>
+              <p className="text-xs text-mercury-gray-600 mt-0.5">
+                Review academic credentials, verify official claims, and approve institutional affiliation badges.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="px-3 py-1 rounded-full bg-white text-amber-800 font-bold text-xs border border-amber-200 shadow-mercury-xs">
+                {pendingAffiliationRequests.length} Pending Request{pendingAffiliationRequests.length === 1 ? '' : 's'}
+              </span>
+            </div>
+          </div>
+
+          {affiliationRequests.length === 0 ? (
+            <div className="mercury-card p-12 text-center text-mercury-gray-400">
+              <UserCheck size={28} className="mx-auto mb-2 text-mercury-gray-300" />
+              <p className="text-sm font-semibold text-mercury-black">No affiliation requests yet</p>
+              <p className="text-xs mt-1">
+                Submitted student or alumni affiliation applications will appear in this review queue.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {affiliationRequests.map((req) => (
+                <div
+                  key={req._id}
+                  className="mercury-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700">
+                        {req.role}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                          req.status === 'approved'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : req.status === 'rejected'
+                            ? 'bg-red-50 text-red-700 border border-red-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}
+                      >
+                        {req.status.replace('_', ' ')}
+                      </span>
+                      <span className="text-[11px] text-mercury-gray-400 font-mono">
+                        {new Date(req.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-mercury-black">
+                      {req.userName || req.userId}
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-mercury-gray-600">
+                      {req.programme && (
+                        <p>
+                          <span className="font-semibold text-mercury-black">Programme:</span> {req.programme}
+                        </p>
+                      )}
+                      {req.department && (
+                        <p>
+                          <span className="font-semibold text-mercury-black">Department:</span> {req.department}
+                        </p>
+                      )}
+                      {req.batch && (
+                        <p>
+                          <span className="font-semibold text-mercury-black">Batch / Year:</span> {req.batch}
+                        </p>
+                      )}
+                      {req.officialEmail && (
+                        <p>
+                          <span className="font-semibold text-mercury-black">Official Email:</span> {req.officialEmail}
+                        </p>
+                      )}
+                    </div>
+
+                    {req.evidence && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-mercury-gray-50 text-xs text-mercury-gray-700 border border-mercury-gray-100">
+                        <span className="font-semibold text-mercury-black">Evidence / Student ID:</span> {req.evidence}
+                      </div>
+                    )}
+                  </div>
+
+                  {req.status === 'pending' && (
+                    <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          reviewAffiliationMutation.mutate({
+                            requestId: req._id,
+                            status: 'approved',
+                          })
+                        }
+                        loading={reviewAffiliationMutation.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-xs"
+                      >
+                        <CheckCircle2 size={13} />
+                        Approve
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          reviewAffiliationMutation.mutate({
+                            requestId: req._id,
+                            status: 'rejected',
+                            reviewReason: 'Documentation did not match institutional records.',
+                          })
+                        }
+                        loading={reviewAffiliationMutation.isPending}
+                        className="text-red-600 hover:bg-red-50 flex items-center gap-1 text-xs"
+                      >
+                        <XCircle size={13} />
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Create Community Modal (Verification Officer) */}
       <Modal
         isOpen={createCommunityOpen}
@@ -866,6 +1221,102 @@ export function InstitutionsPage() {
               onClick={handleAssignRole}
             >
               Confirm Assignment
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Request Affiliation Modal */}
+      <Modal
+        isOpen={requestAffiliationOpen}
+        onClose={() => setRequestAffiliationOpen(false)}
+        title="Request Institutional Affiliation"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-mercury-gray-500 leading-relaxed">
+            Submit your enrollment or graduation credentials to receive an authoritative verified badge from {activeInstitution?.displayName || 'this institution'}.
+          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-mercury-gray-700 mb-1.5 uppercase tracking-wide">
+              Affiliation Role
+            </label>
+            <select
+              value={affiliationForm.role}
+              onChange={(e) =>
+                setAffiliationForm({ ...affiliationForm, role: e.target.value as any })
+              }
+              className="mercury-input"
+            >
+              <option value="Student">Current Student</option>
+              <option value="Alumnus">Alumnus / Graduate</option>
+              <option value="Faculty">Faculty Member</option>
+              <option value="Staff">Staff / Administration</option>
+            </select>
+          </div>
+
+          <Input
+            label="Degree Programme / Major"
+            placeholder="e.g. B.Tech Computer Science, MBA, M.S. Data Science"
+            value={affiliationForm.programme}
+            onChange={(e) =>
+              setAffiliationForm({ ...affiliationForm, programme: e.target.value })
+            }
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Department"
+              placeholder="e.g. Engineering, Business"
+              value={affiliationForm.department}
+              onChange={(e) =>
+                setAffiliationForm({ ...affiliationForm, department: e.target.value })
+              }
+            />
+            <Input
+              label="Graduating Batch / Year"
+              placeholder="e.g. 2026, 2023"
+              value={affiliationForm.batch}
+              onChange={(e) =>
+                setAffiliationForm({ ...affiliationForm, batch: e.target.value })
+              }
+            />
+          </div>
+
+          <Input
+            label="Official Campus Email (Optional)"
+            placeholder="e.g. student@university.edu"
+            value={affiliationForm.officialEmail}
+            onChange={(e) =>
+              setAffiliationForm({ ...affiliationForm, officialEmail: e.target.value })
+            }
+          />
+
+          <Textarea
+            label="Evidence / Student ID / Transcript Reference"
+            placeholder="Provide student ID number, enrollment code, or document reference..."
+            value={affiliationForm.evidence}
+            onChange={(e) =>
+              setAffiliationForm({ ...affiliationForm, evidence: e.target.value })
+            }
+            rows={2}
+          />
+
+          <div className="flex justify-end gap-3 pt-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setRequestAffiliationOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              loading={submitAffiliationMutation.isPending}
+              onClick={() => submitAffiliationMutation.mutate()}
+            >
+              Submit Verification Request
             </Button>
           </div>
         </div>

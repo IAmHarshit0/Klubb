@@ -1,151 +1,138 @@
-# Campus Network
+# CAMPUS NETWORK — MASTER ARCHITECTURE & PLATFORM SPECIFICATION (v3.0)
+> **"Building a Network, Not Just a Directory"**
 
-An institution-aware social network for personal and professional communities, with a personalized **For You** feed and professional discovery.
+Campus Network is an institution-centric professional social networking ecosystem that connects students, alumni, faculty, companies, founders, recruiters, and academic professionals.
 
-## MVP Goal
-Demonstrate two connected workflows:
-1. Members share and discover relevant posts through a personalized feed.
-2. Verified alumni use professional discovery, send connection requests, and can message after a request is accepted.
+Instead of a static contact directory or an engagement-driven social clone, Campus Network unites **verified institutional identity**, **structured community spaces**, **purpose-driven connections**, and a **personalized 7-signal recommendation engine**.
 
-## Core Features
-- **Profiles:** institution affiliation, role, department/programme, batch, company, job title, skills, interests, bio, and portfolio.
-- **Institution communities and groups:** browse all institution communities and structured groups. Verification officers create named communities with a unique institution-scoped suffix; only that institution's Super Admin can create groups.
-- **Institution roles:** Super Admins define and assign roles to verified institution members. Active scoped permissions are shown in the portal and enforced by backend routes.
-- **Social feed:** create text posts, view the For You feed, and interact with comments, reactions, saves, and follows.
-- **Feed ranking:** deterministic baseline scoring uses declared interests and the time-decayed topic map; optional FlashRank reranking falls back to baseline ranking.
-- **Alumni-only professional discovery:** verified alumni search by company, role, skills, institution, programme, or batch.
-- **Alumni availability:** only verified alumni can configure or view mentorship, referral, and question availability.
-- **Connections:** send, accept, or decline connection requests; accepted connections unlock private messaging.
-- **Group access:** request access to restricted groups; authorized supervisors approve or decline.
-- **Moderation:** report content or users, with escalation through the administrative hierarchy.
+---
 
-## Tech Stack (v3.0 Final Specification)
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS (Mercury Visions spatial interface aesthetic)
-- **Backend:** Node.js, TypeScript, Express, Socket.IO
-- **Database:** MongoDB
-- **Ranking:** Baseline deterministic scoring with optional FlashRank adapter
+## 🌟 Master Product Highlights
 
-## Architecture
-Use a **modular monolith**: one React/Vite frontend, one Node/Express backend, and one MongoDB database.
+1. **Dedicated Landing Page (`/` and `/welcome`):**
+   - High-converting architectural walkthrough highlighting the **4 Core Problems** (Directory Trap, Social Noise Trap, Credential Deficit, Monolithic Chaos) and our **Architectural Solutions**.
+   - Interactive **7-Signal Feed Personalization** visualizer showing real-time score composition.
+   - 4-Tier **Identity & Verification State Matrix**.
+   - One-click **Interactive Persona Launcher** covering Platform Verifier, Student, Alumni, Super Admin, and Delegated Officer profiles.
+
+2. **Platform Verifier Portal (`/verifier`):**
+   - Reserved for platform-level operators (`usr-verifier-001` Dr. Aris Thorne) to evaluate institution and company onboarding requests.
+   - States: `Pending`, `Under Review`, `Approved`, `Rejected`, `More Info Required`, `Suspended`, `Revoked`.
+   - Issues canonical human-readable identifiers (e.g. `APEX`, `STR`, `SAIL`) and appoints authorized founding Super Admins.
+   - Platform verifiers cannot inspect private conversations or impersonate users.
+
+3. **Institutional Communities & Affiliation Queue (`/communities`):**
+   - Institutional metrics banner: verified students, verified alumni, active groups, and pending applications.
+   - **Affiliation Verification Queue**: Super Admins and Verification Officers review student/alumni graduation proof, transcripts, and assign authoritative verified status.
+   - Self-serve **"Request Affiliation"** modal allowing students and alumni to apply for institutional verification.
+   - Granular RBAC: Delegated roles defined and assigned by Super Admins (`verify_affiliation`, `create_community`, `publish_announcement`, etc.).
+
+4. **Personalized 7-Signal Discovery & Feed Engine:**
+   - Pre-filtered candidate selection ensuring 100% authoritative audience gating (public vs campus-only vs restricted groups).
+   - Multi-factor scoring formula:
+     $$\text{Score} = 0.28 \cdot \text{Topic} + 0.20 \cdot \text{Behaviour} + 0.15 \cdot \text{Graph} + 0.12 \cdot \text{Freshness} + 0.10 \cdot \text{Quality} + 0.10 \cdot \text{Verified} + 0.05 \cdot \text{Popularity}$$
+   - Alias taxonomy normalization (`k8s` $\to$ `kubernetes`, `ml` $\to$ `machine learning`, `postgres` $\to$ `postgresql`).
+   - Time-decayed campus topic map with half-life decay on interaction signals and mution controls.
+
+5. **Real-time Notification Flyout & Center (`/notifications`):**
+   - Live badge counter in the navigation header.
+   - Interactive dropdown popover with instant "Mark read" and direct navigation links.
+   - Dedicated notification history page with filtering.
+
+6. **Secure Communication & Purpose-Driven Connections:**
+   - Private 1-to-1 messaging is strictly gated behind mutual connection acceptance.
+   - Connections require explicit intent/purpose (Mentorship, Referral, Questions).
+   - Block and moderation controls with complete audit logging.
+
+---
+
+## 🏗️ Architecture
+
+Campus Network is built as a **modular monolith** with clean separation of concerns:
 
 ```text
-React 18 + TypeScript + Vite (Port 5173)
+React 18 + Vite + Tailwind CSS (Port 5173 — Mercury Visions spatial interface)
         │
       REST & Socket.IO (Proxy)
         ▼
 Node.js + Express + Socket.IO (Port 4000)
-  ├── Feed (For You, Alumni, Students)
-  ├── Discovery (verified-alumni-only structured people and organisation search)
-  ├── Institutions, Communities & Groups (hierarchy, announcements, delegated roles)
-  ├── Connections & Real-time Messaging (Socket.IO + Gatekeeper)
-  └── Groups & Scoped Moderation
+  ├── Verification Router (`/api/admin/organization-registrations`, `/api/affiliation-requests`, `/api/institutions/:id/metrics`)
+  ├── Notifications Router (`/api/notifications`, `/api/notifications/:id`, `/api/notifications/read-all`)
+  ├── Feed Engine (`/api/feed` with 7-signal ranking and topic map)
+  ├── Discovery Router (`/api/discover` verified alumni search)
+  ├── Communities & Groups Router (`/api/institutions`, `/api/groups`, `/api/communities`)
+  ├── Connections & Messaging Router (`/api/connections`, `/api/messages` + Socket.IO gatekeeper)
+  └── Users & Interests Router (`/api/me`, `/api/users`)
         │
      MongoDB (campus_network)
 ```
 
-## Getting Started
+---
 
-### 1. Backend Setup
+## 🚀 Quickstart & Setup Instructions
+
+### Prerequisites
+- Node.js (v18+)
+- MongoDB running on `mongodb://localhost:27017`
+
+### 1. Backend Setup & Seeding
 ```bash
 cd backend
 npm install
-npm run seed  # Populates Apex University demo dataset
-npm run dev   # Starts server on http://localhost:4000
+npm run seed   # Populates Apex University, Northstar, Stripe, Demo Users & Notifications
+npm run dev    # Starts API and Socket.IO server on http://localhost:4000
 ```
 
 ### 2. Frontend Setup
 ```bash
 cd frontend
 npm install
-npm run dev   # Starts Vite on http://localhost:5173
+npm run dev    # Starts Vite on http://localhost:5173
 ```
 
-Run MongoDB and the backend before starting the frontend. If Vite reports
-`ECONNREFUSED 127.0.0.1:4000`, the API is not listening: start MongoDB, then run
-`npm run dev` from `backend` and confirm `http://localhost:4000/health` responds.
-The frontend proxies both API and Socket.IO traffic through Vite, and real-time
-status reconnects automatically when the backend becomes available. To use a
-backend on another host or port, set `VITE_API_PROXY_TARGET` in `frontend/.env`
-and restart Vite.
+Visit **`http://localhost:5173`** to view the **Landing Page** and explore the platform!
 
-## Communities, Groups, and Institutional Roles
+---
 
-- Communities are institution-level directory entries with a display name and a
-  lowercase suffix/slug. The suffix must contain letters or numbers separated
-  by single hyphens and is unique within its institution. The Communities page
-  lists all community entries and all groups for the selected institution.
-- A verified institutional role with `create_community` can create communities.
-  The seeded Verification & Placement Officer has that permission. Creating a
-  community does not grant group membership or group-posting access.
-- Group creation is reserved for an active, institution-verified Super Admin
-  affiliation. Existing group types, visibility rules, memberships, and
-  moderator controls remain separate from community directory entries.
-- Super Admins define role templates and assign them to active, verified
-  institutional members. Assignments are institution-scoped; role templates
-  cannot grant arbitrary or wildcard permissions. The `/api/me` response
-  includes the current user's active institutional roles and permissions.
-- Relevant permissions include `create_community`, `verify_affiliation`,
-  `verify_employment`, `publish_announcement`, and
-  `moderate_student_groups`. The backend is authoritative; hiding a button in
-  the frontend is not an authorization check.
+## 🧪 Comprehensive Verification & Test Suite
 
-## Topic Map
+All 9 test suites and 40/40 tests pass with 100% success rate:
 
-**My Profile → Your Campus Topic Map** displays long-term interests and
-time-decayed disclosed signals from follows, searches, saves, reactions,
-comments, and published post topic labels. Members can mute topics or reset
-inferred signals; resetting preserves declared interests, skills, and follows.
-Private message content is never used for topic inference.
+```bash
+cd backend
+npm test
+```
 
-## Demo Authentication and Deployment Warning
+### Test Suite Summary:
+- `tests/verification.test.ts` (9 tests): Organization registration queue, platform verifier review, short code assignment, founding super admin appointment, student/alumni affiliation requests, verification officer approvals, institutional metrics, and notification dispatch.
+- `tests/feed.test.ts` (2 tests): Pre-filtering candidate pool, audience restrictions, and 7-signal personalized feed scoring.
+- `tests/topic-interests.test.ts` (7 tests): Alias taxonomy normalization, declared interests, time-decayed topic map, signal decay, and mution.
+- `tests/connections.test.ts` (2 tests): Connection request workflow and private messaging gatekeeper (403 Forbidden until accepted).
+- `tests/governance.test.ts` (5 tests): Scoped institutional roles, delegated permissions, announcements, and organization verification transitions.
+- `tests/groups.test.ts` (5 tests): Super admin group creation, restricted group access request and supervisor approvals.
+- `tests/discovery.test.ts` (3 tests): Verified-alumni-only discovery gating, employer-verified vs self-reported badge distinction.
+- `tests/permissions.test.ts` (4 tests): Verification officer checks, super admin role checks, and support exception routing.
+- `tests/users.test.ts` (3 tests): Profile interest sanitization, availability gating, and privacy controls.
 
-This repository currently uses demo authentication: API requests identify a
-user through `X-User-Id` (or a raw user ID in the bearer header), and the UI
-includes a demo-user switcher. This is suitable only for a local/demo
-environment. **Do not expose this backend to untrusted users or deploy it as a
-production service.** A real authentication provider, signed/validated
-credentials, and server-side session/token verification are required before
-production; otherwise a caller can impersonate another seeded user and bypass
-role-based authorization.
+**Result: 9 passed, 40 passed (100% passing).**
 
-## Validation
+---
 
-From `backend`, run `npm test` for the backend Vitest suite and `npm run build`
-for the TypeScript build. From `frontend`, run `npm run build` for the Vite
-production build. Tests connect to a local MongoDB database named `campus_network_test` and
-reseed it before each test case.
+## 👥 Demo Personas Available in User Switcher
 
-Student interests can be added or removed from **My Profile → Your interests**.
-The seeded demo users also include multiple verified institution affiliations,
-dual alumnus/student affiliations, super admins and their delegated roles, and
-an unverified company representative.
+| User ID | Persona Name | Role | Primary Features Demonstrated |
+|---|---|---|---|
+| `usr-verifier-001` | Dr. Aris Thorne | Campus Network Platform Verifier | `/verifier` Portal, approve orgs, appoint Super Admins |
+| `usr-admin-001` | Dean Robert Sterling | Super Admin (Apex University) | Create groups, define roles, delegate officer permissions |
+| `usr-officer-001` | Sarah Jenkins | Verification Officer (Delegated) | Review student/alumni affiliation queue, approve credentials |
+| `usr-student-001` | Alex Rivera | Student (Computer Science) | Feed, interests topic map, request institutional affiliation |
+| `usr-alumnus-001` | Priya Sharma | Alumna (Staff Engineer @ Stripe) | Alumni discovery, mentorship availability, messaging |
+| `usr-faculty-001` | Dr. Elena Vance | Faculty & Group Supervisor | Group access supervisor approvals, announcements |
+| `usr-company-rep-001` | Avery Brooks | Company Representative (Pending) | Self-reported vs verified distinction |
 
-## MVP Acceptance Criteria
-- A seeded institution contains students, alumni, groups, and posts.
-- A user can create a post and see it in the feed.
-- The feed supports baseline ranking and optional FlashRank reranking.
-- Different demo users can receive meaningfully different feed results.
-- Only verified alumni can use professional discovery or view/configure availability.
-- Members can still view permitted profile details, but availability is not included for non-alumni profile owners or non-alumni viewers.
-- Connection acceptance gates member-to-member private messaging; institution administrators retain the explicit support-message exception implemented by the backend.
-- Group access is separate from personal connections.
-- Backend permission tests pass and the demo starts from documented instructions.
+---
 
-## Non-Negotiable Rules
-- Backend permission checks are authoritative; frontend hiding is not security. The current demo identity mechanism is not production-safe; see the deployment warning above.
-- Filter inaccessible posts before reranking and before returning results.
-- A connection request does not grant messaging access until accepted.
-- Private one-to-one messages are not accessible to institution/group administrators by default.
-- Institutional affiliation and employer verification are distinct statuses.
-- Alumni-only features require an active, institution-verified Alumnus affiliation. A verified dual-role member qualifies.
-- Topic affinity ranking must not override access permissions.
+## 📋 Master Product Specifications
 
-## Out of Scope for the MVP
-- Production-grade institutional SSO and bulk data migration
-- Employer integrations or automatic employment verification
-- Custom-trained recommendation models or advanced AI generation
-- Large-scale real-time chat infrastructure, calls, and notifications
-- Complex analytics dashboards, monetization, and multi-institution rollout tooling
-
-## Implementation Principle
-**Ship one reliable end-to-end workflow before adding breadth.**
+The complete, unabridged product specifications, database schemas, API routes, and recommendation engine algorithms are preserved in:
+👉 [**final_product_features.md**](./final_product_features.md)

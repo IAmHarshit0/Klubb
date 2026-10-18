@@ -11,7 +11,7 @@ import {
   Conversation,
   Message,
 } from "../../shared/models.js";
-import { canModerateGroup, isInstitutionAdmin } from "../../shared/permissions.js";
+import { canModerateGroup, isInstitutionAdmin, createNotification } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 
 export const groupsRouter = Router();
@@ -351,3 +351,160 @@ groupsRouter.patch("/groups/:groupId", authenticateUser, async (req: Request, re
     next(err);
   }
 });
+
+// GET /api/groups/:groupId/members
+// Returns member roster with roles
+groupsRouter.get("/groups/:groupId/members", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.groupId as string;
+    const group = await Group.findById(groupId);
+    if (!group) return next(new AppError("Group not found", 404));
+
+    const memberships = await Membership.find({ groupId, status: "active" }).sort({ joinedAt: -1 });
+    const userIds = memberships.map((m) => m.userId);
+    const users = await User.find({ _id: { $in: userIds } });
+    const userMap = new Map(users.map((u) => [u._id, u]));
+
+    const members = memberships.map((m) => {
+      const u = userMap.get(m.userId);
+      return {
+        _id: m._id,
+        userId: m.userId,
+        name: u?.name || "Member",
+        email: u?.email || "",
+        role: m.role,
+        status: m.status,
+        joinedAt: m.joinedAt,
+      };
+    });
+
+    res.json({ members });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/groups/:groupId/members
+// Add a member or update a member's role (admin/moderator/supervisor only)
+groupsRouter.post("/groups/:groupId/members", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.groupId as string;
+    const { userId, role = "member" } = req.body;
+
+    if (!userId) return next(new AppError("userId is required", 400));
+    if (!["member", "moderator", "supervisor", "admin"].includes(role)) {
+      return next(new AppError("Invalid membership role", 400));
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) return next(new AppError("Group not found", 404));
+
+    const canManage = (await canModerateGroup(req.user!._id, groupId)) || (await isInstitutionAdmin(req.user!._id, group.institutionId));
+    if (!canManage) {
+      return next(new AppError("Only group supervisors or institution administrators can manage members", 403));
+    }
+
+    const membership = await Membership.findOneAndUpdate(
+      { userId, groupId },
+      {
+        $setOnInsert: { _id: `mem-${crypto.randomBytes(6).toString("hex")}` },
+        $set: { role, status: "active", joinedAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    // Notify user
+    await createNotification({
+      userId,
+      actorId: req.user!._id,
+      actorName: req.user!.name,
+      type: "group_access_decision",
+      title: "Group Membership Updated",
+      message: `You are now a ${role} of group "${group.name}".`,
+      link: `/groups/${group._id}`,
+    });
+
+    res.status(200).json({ membership });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/groups/:groupId/members/:userId
+// Remove a member or leave group
+groupsRouter.delete("/groups/:groupId/members/:userId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.groupId as string;
+    const targetUserId = req.params.userId as string;
+
+    const group = await Group.findById(groupId);
+    if (!group) return next(new AppError("Group not found", 404));
+
+    const isSelf = req.user!._id === targetUserId;
+    const canManage = (await canModerateGroup(req.user!._id, groupId)) || (await isInstitutionAdmin(req.user!._id, group.institutionId));
+
+    if (!isSelf && !canManage) {
+      return next(new AppError("You do not have permission to remove this member", 403));
+    }
+
+    await Membership.findOneAndDelete({ userId: targetUserId, groupId });
+    res.json({ message: isSelf ? "Left group successfully" : "Member removed successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/groups/:groupId/announcements
+// Group-scoped official broadcast announcement
+groupsRouter.post("/groups/:groupId/announcements", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const groupId = req.params.groupId as string;
+    const { title, body } = req.body;
+
+    if (!title || !body) {
+      return next(new AppError("Title and body are required for group announcement", 400));
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) return next(new AppError("Group not found", 404));
+
+    const canBroadcast = (await canModerateGroup(req.user!._id, groupId)) || (await isInstitutionAdmin(req.user!._id, group.institutionId));
+    if (!canBroadcast) {
+      return next(new AppError("Only authorized group supervisors or administrators can broadcast announcements", 403));
+    }
+
+    const { InstitutionAnnouncement } = await import("../../shared/models.js");
+    const announcement = new InstitutionAnnouncement({
+      _id: `ann-${crypto.randomBytes(6).toString("hex")}`,
+      institutionId: group.institutionId,
+      senderId: req.user!._id,
+      targetType: "group",
+      targetIds: [groupId],
+      title: title.trim(),
+      body: body.trim(),
+      status: "published",
+      createdAt: new Date(),
+    });
+    await announcement.save();
+
+    // Notify all active group members
+    const members = await Membership.find({ groupId, status: "active" });
+    for (const member of members) {
+      if (member.userId === req.user!._id) continue;
+      await createNotification({
+        userId: member.userId,
+        actorId: req.user!._id,
+        actorName: req.user!.name,
+        type: "announcement",
+        title: `Group Announcement: ${title.trim()}`,
+        message: body.trim().slice(0, 140),
+        link: `/groups/${group._id}`,
+      });
+    }
+
+    res.status(201).json({ announcement });
+  } catch (err) {
+    next(err);
+  }
+});
+

@@ -8,10 +8,48 @@ import {
   Conversation,
   UserConnectionPreferences,
 } from "../../shared/models.js";
-import { isBlocked } from "../../shared/permissions.js";
+import { isBlocked, createNotification } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 
 export const connectionsRouter = Router();
+
+// GET /api/connections/requests/incoming
+connectionsRouter.get("/connections/requests/incoming", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const viewerId = req.user!._id;
+    const connections = await Connection.find({ recipientId: viewerId, status: "pending" }).sort({ createdAt: -1 });
+    const userIds = connections.map((c) => c.requesterId);
+    const users = await User.find({ _id: { $in: userIds } });
+    const userMap = new Map(users.map((u) => [u._id, u]));
+
+    const requests = connections.map((c) => ({
+      ...c.toObject(),
+      requester: userMap.get(c.requesterId) || null,
+    }));
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/connections/requests/outgoing
+connectionsRouter.get("/connections/requests/outgoing", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const viewerId = req.user!._id;
+    const connections = await Connection.find({ requesterId: viewerId, status: "pending" }).sort({ createdAt: -1 });
+    const userIds = connections.map((c) => c.recipientId);
+    const users = await User.find({ _id: { $in: userIds } });
+    const userMap = new Map(users.map((u) => [u._id, u]));
+
+    const requests = connections.map((c) => ({
+      ...c.toObject(),
+      recipient: userMap.get(c.recipientId) || null,
+    }));
+    res.json({ requests });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/connections
 connectionsRouter.get("/connections", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
@@ -120,6 +158,18 @@ connectionsRouter.post("/connections", authenticateUser, async (req: Request, re
     });
 
     await conn.save();
+
+    // In-app notification for the recipient
+    await createNotification({
+      userId: recipientId,
+      actorId: requesterId,
+      actorName: req.user!.name,
+      type: "connection_request",
+      title: "New Connection Request",
+      message: `${req.user!.name} sent you a connection request${message ? `: "${message}"` : "."}`,
+      link: `/connections`,
+    });
+
     res.status(201).json({ connection: conn });
   } catch (err) {
     next(err);
@@ -167,6 +217,16 @@ connectionsRouter.patch("/connections/:connectionId", authenticateUser, async (r
         });
         await conv.save();
       }
+
+      await createNotification({
+        userId: conn.requesterId,
+        actorId: req.user!._id,
+        actorName: req.user!.name,
+        type: "connection_accepted",
+        title: "Connection Request Accepted",
+        message: `${req.user!.name} accepted your connection request. You can now chat!`,
+        link: `/messages`,
+      });
     }
 
     res.json({ connection: conn });
@@ -218,6 +278,19 @@ connectionsRouter.post("/users/:userId/block", authenticateUser, async (req: Req
     );
 
     res.json({ message: "User blocked successfully" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/users/:userId/block (unblock)
+connectionsRouter.delete("/users/:userId/block", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const blockerId = req.user!._id;
+    const blockedId = req.params.userId;
+
+    await Block.findOneAndDelete({ blockerId, blockedId });
+    res.json({ message: "User unblocked successfully" });
   } catch (err) {
     next(err);
   }
