@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { getFeed } from '../api/feed';
 import type { FeedTab, FeedMode } from '../api/feed';
@@ -32,6 +32,24 @@ export function FeedPage() {
     getNextPageParam: (lastPage) => lastPage.nextCursor || undefined,
     initialPageParam: undefined as string | undefined,
   });
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void fetchNextPage();
+      },
+      {
+        root: document.getElementById('main-content'),
+        rootMargin: '400px 0px',
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const handleTabChange = useCallback((newTab: FeedTab) => {
     setTab(newTab);
@@ -126,7 +144,8 @@ export function FeedPage() {
 
         {/* Load more */}
         {hasNextPage && (
-          <div ref={loadMoreRef} className="pt-2 pb-8 flex justify-center">
+          <div className="pt-2 pb-8 flex flex-col items-center gap-3">
+            <div ref={loadMoreRef} aria-hidden="true" className="h-1 w-full" />
             <button
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
@@ -140,6 +159,9 @@ export function FeedPage() {
               Load more
             </button>
           </div>
+        )}
+        {!hasNextPage && visibleItems.length > 0 && (
+          <p className="py-6 text-center text-xs text-mercury-gray-400">You’re all caught up.</p>
         )}
       </div>
     </div>

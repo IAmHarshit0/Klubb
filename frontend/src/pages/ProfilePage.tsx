@@ -28,7 +28,7 @@ import type { Connection, Conversation } from '../types/api';
 export function ProfilePage() {
   const { userId: routeUserId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
-  const { userId: currentUserId } = useAuth();
+  const { userId: currentUserId, isVerifiedAlumnus } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -48,7 +48,7 @@ export function ProfilePage() {
     isError,
     error,
   } = useQuery({
-    queryKey: ['user', targetId],
+    queryKey: ['user', currentUserId, targetId],
     queryFn: () => getUserProfile(targetId),
     retry: 1,
   });
@@ -84,7 +84,7 @@ export function ProfilePage() {
       setBlockOpen(false);
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['discover'] });
-      navigate('/discover');
+      navigate(isVerifiedAlumnus ? '/discover' : '/feed');
     } catch (e: any) {
       toast(e.message, 'error');
     } finally {
@@ -119,8 +119,8 @@ export function ProfilePage() {
         <p className="text-sm text-mercury-gray-500 mb-6">
           {(error as Error)?.message || 'This profile is not accessible or has been restricted.'}
         </p>
-        <Link to="/discover">
-          <Button variant="secondary">Back to Discovery</Button>
+        <Link to={isVerifiedAlumnus ? '/discover' : '/feed'}>
+          <Button variant="secondary">{isVerifiedAlumnus ? 'Back to Discovery' : 'Back to Feed'}</Button>
         </Link>
       </div>
     );
@@ -272,7 +272,7 @@ export function ProfilePage() {
       </div>
 
       {/* Skills & Availability */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className={`grid grid-cols-1 gap-6 mb-8 ${isVerifiedAlumnus ? 'md:grid-cols-2' : ''}`}>
         {/* Skills */}
         <div className="mercury-card p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -298,6 +298,7 @@ export function ProfilePage() {
         </div>
 
         {/* Stated Availability */}
+        {isVerifiedAlumnus && (
         <div className="mercury-card p-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-mercury-black mb-4">
             Stated Availability
@@ -339,6 +340,7 @@ export function ProfilePage() {
             <p className="text-xs text-mercury-gray-400">Availability preferences not set.</p>
           )}
         </div>
+        )}
       </div>
 
       {/* Safety Actions (Block & Report) */}

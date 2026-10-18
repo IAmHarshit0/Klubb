@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { app } from "../src/app.js";
-import { Affiliation, Organisation } from "../src/shared/models.js";
+import {
+  Affiliation,
+  EmploymentClaim,
+  Institution,
+  Organisation,
+  OrganisationRepresentative,
+  RoleAssignment,
+  RoleDefinition,
+} from "../src/shared/models.js";
 
 describe("Institutional Governance, Announcements & Organisation Verification", () => {
   it("Admin verifies an affiliation and creates an audit event", async () => {
@@ -66,5 +74,90 @@ describe("Institutional Governance, Announcements & Organisation Verification", 
 
     expect(patchRes.status).toBe(200);
     expect(patchRes.body.organisation.verificationStatus).toBe("verified");
+  });
+
+  it("Seeds multi-institution identities, super admins, delegated roles, and an unverified company representative", async () => {
+    const institutions = await Institution.find();
+    expect(institutions.map((institution) => institution._id)).toEqual(
+      expect.arrayContaining(["inst-apex-001", "inst-northstar-002"])
+    );
+
+    const activeAffiliations = await Affiliation.find({
+      status: "active",
+      verificationStatus: "institution-verified",
+    });
+    expect(activeAffiliations.filter((affiliation) => affiliation.role === "Student").length)
+      .toBeGreaterThanOrEqual(2);
+    const verifiedAlumniByUser = new Map<string, number>();
+    for (const affiliation of activeAffiliations.filter((item) => item.role === "Alumnus")) {
+      verifiedAlumniByUser.set(
+        affiliation.userId,
+        (verifiedAlumniByUser.get(affiliation.userId) || 0) + 1
+      );
+    }
+    expect(Array.from(verifiedAlumniByUser.values())).toContain(1);
+
+    const multiInstitutionAlumnus = await Affiliation.find({
+      userId: "usr-alumnus-multi-001",
+      status: "active",
+    });
+    expect(multiInstitutionAlumnus).toHaveLength(2);
+    expect(multiInstitutionAlumnus.every(
+      (affiliation) =>
+        affiliation.role === "Alumnus" &&
+        affiliation.verificationStatus === "institution-verified"
+    )).toBe(true);
+
+    const dualRoleAffiliations = await Affiliation.find({
+      userId: "usr-dual-role-001",
+      status: "active",
+    });
+    expect(dualRoleAffiliations.map((affiliation) => [
+      affiliation.institutionId,
+      affiliation.role,
+      affiliation.verificationStatus,
+    ])).toEqual(expect.arrayContaining([
+      ["inst-apex-001", "Alumnus", "institution-verified"],
+      ["inst-northstar-002", "Student", "institution-verified"],
+    ]));
+
+    const admins = await Affiliation.find({
+      role: "Admin",
+      status: "active",
+      verificationStatus: "institution-verified",
+    });
+    expect(admins.map((affiliation) => [affiliation.userId, affiliation.institutionId])).toEqual(
+      expect.arrayContaining([
+        ["usr-admin-001", "inst-apex-001"],
+        ["usr-admin-northstar-001", "inst-northstar-002"],
+      ])
+    );
+
+    const customRoles = await RoleDefinition.find({
+      createdBy: { $in: ["usr-admin-001", "usr-admin-northstar-001"] },
+    });
+    const assignments = await RoleAssignment.find({ status: "active" });
+    expect(customRoles.length).toBeGreaterThanOrEqual(3);
+    expect(assignments.map((assignment) => [
+      assignment.userId,
+      assignment.roleDefinitionId,
+      assignment.assignedBy,
+    ])).toEqual(expect.arrayContaining([
+      ["usr-officer-001", "role-verif-officer", "usr-admin-001"],
+      ["usr-officer-northstar-001", "role-northstar-community-lead", "usr-admin-northstar-001"],
+    ]));
+
+    expect(await Affiliation.countDocuments({ userId: "usr-company-rep-001" })).toBe(0);
+    expect(await EmploymentClaim.findOne({ userId: "usr-company-rep-001" })).toMatchObject({
+      companyName: "BrightPath Labs",
+      status: "self-reported",
+    });
+    expect(await Organisation.findById("org-brightpath-labs")).toMatchObject({
+      verificationStatus: "unverified",
+    });
+    expect(await OrganisationRepresentative.findById("rep-avery-brightpath")).toMatchObject({
+      userId: "usr-company-rep-001",
+      verificationStatus: "pending",
+    });
   });
 });

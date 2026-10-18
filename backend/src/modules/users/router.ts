@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { authenticateUser } from "../auth/middleware.js";
+import { authenticateUser, requireVerifiedAlumnus } from "../auth/middleware.js";
 import {
   User,
   Affiliation,
@@ -7,10 +7,17 @@ import {
   UserFeedPreferences,
   UserConnectionPreferences,
 } from "../../shared/models.js";
-import { canViewProfile } from "../../shared/permissions.js";
+import { canViewProfile, hasVerifiedAlumniAffiliation } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 
 export const usersRouter = Router();
+
+const DEFAULT_CONNECTION_PREFERENCES = {
+  availableForMentorship: true,
+  availableForReferrals: true,
+  availableForQuestions: true,
+  pauseIncomingRequests: false,
+};
 
 // GET /api/me
 usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
@@ -18,7 +25,10 @@ usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, nex
     const user = req.user!;
     const affiliations = await Affiliation.find({ userId: user._id, status: "active" });
     const employmentClaims = await EmploymentClaim.find({ userId: user._id });
-    const connectionPrefs = await UserConnectionPreferences.findOne({ userId: user._id });
+    const hasAlumniAccess = await hasVerifiedAlumniAffiliation(user._id);
+    const connectionPrefs = hasAlumniAccess
+      ? await UserConnectionPreferences.findOne({ userId: user._id })
+      : null;
 
     res.json({
       user: {
@@ -32,12 +42,9 @@ usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, nex
         profileVisibility: user.profileVisibility,
         affiliations,
         employmentClaims,
-        connectionPreferences: connectionPrefs || {
-          availableForMentorship: true,
-          availableForReferrals: true,
-          availableForQuestions: true,
-          pauseIncomingRequests: false,
-        },
+        ...(hasAlumniAccess && {
+          connectionPreferences: connectionPrefs || DEFAULT_CONNECTION_PREFERENCES,
+        }),
       },
     });
   } catch (err) {
@@ -51,7 +58,10 @@ usersRouter.get("/users/me", authenticateUser, async (req: Request, res: Respons
     const user = req.user!;
     const affiliations = await Affiliation.find({ userId: user._id, status: "active" });
     const employmentClaims = await EmploymentClaim.find({ userId: user._id });
-    const connectionPrefs = await UserConnectionPreferences.findOne({ userId: user._id });
+    const hasAlumniAccess = await hasVerifiedAlumniAffiliation(user._id);
+    const connectionPrefs = hasAlumniAccess
+      ? await UserConnectionPreferences.findOne({ userId: user._id })
+      : null;
 
     res.json({
       user: {
@@ -65,12 +75,9 @@ usersRouter.get("/users/me", authenticateUser, async (req: Request, res: Respons
         profileVisibility: user.profileVisibility,
         affiliations,
         employmentClaims,
-        connectionPreferences: connectionPrefs || {
-          availableForMentorship: true,
-          availableForReferrals: true,
-          availableForQuestions: true,
-          pauseIncomingRequests: false,
-        },
+        ...(hasAlumniAccess && {
+          connectionPreferences: connectionPrefs || DEFAULT_CONNECTION_PREFERENCES,
+        }),
       },
     });
   } catch (err) {
@@ -96,7 +103,13 @@ usersRouter.get("/users/:userId", authenticateUser, async (req: Request, res: Re
 
     const affiliations = await Affiliation.find({ userId: user._id, status: "active" });
     const employmentClaims = await EmploymentClaim.find({ userId: user._id });
-    const connectionPrefs = await UserConnectionPreferences.findOne({ userId: user._id });
+    const [viewerCanViewAvailability, targetHasAvailability] = await Promise.all([
+      hasVerifiedAlumniAffiliation(viewer._id),
+      hasVerifiedAlumniAffiliation(user._id),
+    ]);
+    const connectionPrefs = viewerCanViewAvailability && targetHasAvailability
+      ? await UserConnectionPreferences.findOne({ userId: user._id })
+      : null;
 
     res.json({
       id: user._id,
@@ -121,14 +134,17 @@ usersRouter.get("/users/:userId", authenticateUser, async (req: Request, res: Re
         jobTitle: e.jobTitle,
         status: e.status,
       })),
-      availability: connectionPrefs
-        ? {
-            mentorship: connectionPrefs.availableForMentorship,
-            referrals: connectionPrefs.availableForReferrals,
-            questions: connectionPrefs.availableForQuestions,
-            paused: connectionPrefs.pauseIncomingRequests,
-          }
-        : { mentorship: true, referrals: true, questions: true, paused: false },
+      ...(viewerCanViewAvailability &&
+        targetHasAvailability && {
+          availability: connectionPrefs
+            ? {
+                mentorship: connectionPrefs.availableForMentorship,
+                referrals: connectionPrefs.availableForReferrals,
+                questions: connectionPrefs.availableForQuestions,
+                paused: connectionPrefs.pauseIncomingRequests,
+              }
+            : { mentorship: true, referrals: true, questions: true, paused: false },
+        }),
     });
   } catch (err) {
     next(err);
@@ -142,6 +158,30 @@ usersRouter.get("/me/interests", authenticateUser, async (req: Request, res: Res
       declaredInterests: req.user!.interests || [],
       skills: req.user!.skills || [],
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/me/interests
+usersRouter.patch("/me/interests", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { interests } = req.body;
+    if (!Array.isArray(interests) || interests.some((interest) => typeof interest !== "string")) {
+      return next(new AppError("Interests must be an array of strings", 400));
+    }
+
+    const normalizedInterests = Array.from(
+      new Set(interests.map((interest: string) => interest.trim()).filter(Boolean))
+    );
+    const user = await User.findByIdAndUpdate(
+      req.user!._id,
+      { interests: normalizedInterests },
+      { new: true }
+    );
+
+    if (!user) return next(new AppError("User not found", 404));
+    res.json({ message: "Interests updated", interests: user.interests });
   } catch (err) {
     next(err);
   }
@@ -183,15 +223,12 @@ usersRouter.patch("/me/feed-preferences", authenticateUser, async (req: Request,
 });
 
 // GET /api/me/connection-preferences
-usersRouter.get("/me/connection-preferences", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.get("/me/connection-preferences", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const prefs = await UserConnectionPreferences.findOne({ userId: req.user!._id });
     res.json(
       prefs || {
-        availableForMentorship: true,
-        availableForReferrals: true,
-        availableForQuestions: true,
-        pauseIncomingRequests: false,
+        ...DEFAULT_CONNECTION_PREFERENCES,
       }
     );
   } catch (err) {
@@ -200,7 +237,7 @@ usersRouter.get("/me/connection-preferences", authenticateUser, async (req: Requ
 });
 
 // PATCH /api/me/connection-preferences
-usersRouter.patch("/me/connection-preferences", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.patch("/me/connection-preferences", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { availableForMentorship, availableForReferrals, availableForQuestions, pauseIncomingRequests } = req.body;
     let prefs = await UserConnectionPreferences.findOne({ userId: req.user!._id });

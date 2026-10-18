@@ -32,9 +32,12 @@ function createApiClient(): AxiosInstance {
   // Normalize errors — never expose raw stack traces or internal details
   instance.interceptors.response.use(
     (response) => response,
-    (error: AxiosError<{ message?: string; error?: string }>) => {
+    (error: AxiosError<{ message?: string; error?: string | { message?: string } }>) => {
       const status = error.response?.status;
-      const serverMessage = error.response?.data?.message || error.response?.data?.error;
+      const serverError = error.response?.data?.error;
+      const serverMessage =
+        error.response?.data?.message ||
+        (typeof serverError === 'string' ? serverError : serverError?.message);
 
       let userMessage = 'Something went wrong. Please try again.';
 

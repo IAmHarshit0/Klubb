@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Rss, Search, MessageCircle, Users, Network, Building2 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
   { to: '/feed', icon: Rss, label: 'Feed' },
@@ -11,6 +12,11 @@ const navItems = [
 ];
 
 export function Sidebar() {
+  const { isVerifiedAlumnus } = useAuth();
+  const visibleNavItems = navItems.filter(
+    (item) => item.to !== '/discover' || isVerifiedAlumnus
+  );
+
   return (
     <nav
       aria-label="Main navigation"
@@ -31,7 +37,7 @@ export function Sidebar() {
 
       {/* Nav links */}
       <ul className="flex flex-col gap-1" role="list">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {visibleNavItems.map(({ to, icon: Icon, label }) => (
           <li key={to}>
             <NavLink
               to={to}

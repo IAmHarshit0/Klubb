@@ -11,7 +11,6 @@ const TABS: { id: FeedTab; label: string; icon: LucideIcon }[] = [
   { id: 'for-you', label: 'For You', icon: Zap },
   { id: 'alumni', label: 'Alumni', icon: GraduationCap },
   { id: 'students', label: 'Students', icon: Users },
-  { id: 'following', label: 'Following', icon: Rss },
 ];
 
 export function FeedTabs({ activeTab, onTabChange }: FeedTabsProps) {

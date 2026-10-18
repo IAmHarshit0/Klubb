@@ -22,6 +22,7 @@ import {
   RoleDefinition,
   RoleAssignment,
   InstitutionAnnouncement,
+  OrganisationRepresentative,
 } from "../shared/models.js";
 
 export async function seedDatabase(): Promise<void> {
@@ -47,6 +48,7 @@ export async function seedDatabase(): Promise<void> {
     UserConnectionPreferences.deleteMany({}),
     UserFeedPreferences.deleteMany({}),
     Organisation.deleteMany({}),
+    OrganisationRepresentative.deleteMany({}),
     Follow.deleteMany({}),
     RoleDefinition.deleteMany({}),
     RoleAssignment.deleteMany({}),
@@ -64,6 +66,15 @@ export async function seedDatabase(): Promise<void> {
     type: "university",
   });
   await apexUniv.save();
+
+  const northstarInstitute = new Institution({
+    _id: "inst-northstar-002",
+    name: "Northstar Institute of Technology",
+    displayName: "Northstar Institute",
+    slug: "northstar-institute",
+    type: "university",
+  });
+  await northstarInstitute.save();
 
   // 2. Users (Students, Alumni, Faculty, Admin)
   const users = [
@@ -157,6 +168,56 @@ export async function seedDatabase(): Promise<void> {
       bio: "Campus Placement & Verification Officer. Manages student credentials and employer verifications.",
       skills: ["Credential Verification", "Student Affairs", "Career Development"],
       interests: ["Alumni Relations", "Career Fair", "Audits"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-alumnus-multi-001",
+      name: "Taylor Morgan",
+      email: "taylor.morgan@example.com",
+      demoKey: "alumnus-multiple-institutions",
+      bio: "Apex and Northstar alum working across software engineering and applied research.",
+      skills: ["Software Engineering", "Research", "Cloud"],
+      interests: ["Mentorship", "Cloud", "Research"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-dual-role-001",
+      name: "Riley Chen",
+      email: "riley.chen@example.com",
+      demoKey: "alumnus-and-student",
+      bio: "Apex alum and current Northstar graduate student.",
+      skills: ["Machine Learning", "Data Science"],
+      interests: ["Graduate School", "AI Research"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-admin-northstar-001",
+      name: "Dr. Amara Okafor",
+      email: "amara.okafor@northstar.edu",
+      demoKey: "admin-northstar",
+      bio: "Super Administrator for Northstar Institute.",
+      skills: ["Institutional Governance", "Academic Administration"],
+      interests: ["Higher Education", "Research"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-officer-northstar-001",
+      name: "Noah Williams",
+      email: "noah.williams@northstar.edu",
+      demoKey: "officer-northstar",
+      bio: "Northstar community and events coordinator.",
+      skills: ["Community Management", "Events"],
+      interests: ["Student Communities", "Events"],
+      profileVisibility: "public",
+    }),
+    new User({
+      _id: "usr-company-rep-001",
+      name: "Avery Brooks",
+      email: "avery@brightpath.example",
+      demoKey: "company-representative",
+      bio: "Founder of BrightPath Labs; company and representative verification are pending.",
+      skills: ["Entrepreneurship", "Product Strategy"],
+      interests: ["Startups", "Product Design"],
       profileVisibility: "public",
     }),
   ];
@@ -263,6 +324,68 @@ export async function seedDatabase(): Promise<void> {
       verificationStatus: "institution-verified",
       verifiedAt: now,
     }),
+    new Affiliation({
+      _id: "aff-taylor-apex",
+      userId: "usr-alumnus-multi-001",
+      institutionId: "inst-apex-001",
+      role: "Alumnus",
+      programme: "Information Systems M.S.",
+      batch: "Class of 2019",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-taylor-northstar",
+      userId: "usr-alumnus-multi-001",
+      institutionId: "inst-northstar-002",
+      role: "Alumnus",
+      programme: "Computer Engineering B.S.",
+      batch: "Class of 2016",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-riley-apex",
+      userId: "usr-dual-role-001",
+      institutionId: "inst-apex-001",
+      role: "Alumnus",
+      programme: "Computer Science B.S.",
+      batch: "Class of 2022",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-riley-northstar",
+      userId: "usr-dual-role-001",
+      institutionId: "inst-northstar-002",
+      role: "Student",
+      programme: "Artificial Intelligence M.S.",
+      batch: "Class of 2027",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-admin-northstar",
+      userId: "usr-admin-northstar-001",
+      institutionId: "inst-northstar-002",
+      role: "Admin",
+      programme: "Institute Administration",
+      department: "Academic Affairs",
+      batch: "Administration",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
+    new Affiliation({
+      _id: "aff-officer-northstar",
+      userId: "usr-officer-northstar-001",
+      institutionId: "inst-northstar-002",
+      role: "Faculty",
+      programme: "Student Engagement",
+      department: "Community Programs",
+      batch: "Staff",
+      verificationStatus: "institution-verified",
+      verifiedAt: now,
+    }),
   ];
   await Affiliation.insertMany(affiliations);
 
@@ -291,8 +414,31 @@ export async function seedDatabase(): Promise<void> {
       status: "employer-verified",
       verifiedAt: now,
     }),
+    new EmploymentClaim({
+      _id: "claim-avery-001",
+      userId: "usr-company-rep-001",
+      companyName: "BrightPath Labs",
+      jobTitle: "Founder",
+      status: "self-reported",
+    }),
   ];
   await EmploymentClaim.insertMany(claims);
+
+  const brightPath = new Organisation({
+    _id: "org-brightpath-labs",
+    name: "BrightPath Labs",
+    type: "company",
+    website: "https://brightpath.example",
+    verificationStatus: "unverified",
+  });
+  await brightPath.save();
+  await OrganisationRepresentative.create({
+    _id: "rep-avery-brightpath",
+    organisationId: brightPath._id,
+    userId: "usr-company-rep-001",
+    role: "Founder",
+    verificationStatus: "pending",
+  });
 
   // 5. Connection Preferences
   const prefs = [
@@ -470,7 +616,21 @@ export async function seedDatabase(): Promise<void> {
     createdBy: "usr-admin-001",
   });
 
-  await RoleDefinition.insertMany([roleVerificationOfficer, roleStudentAmbassador]);
+  const northstarCommunityLead = new RoleDefinition({
+    _id: "role-northstar-community-lead",
+    institutionId: "inst-northstar-002",
+    scopeType: "institution",
+    scopeId: "inst-northstar-002",
+    name: "Community Programs Lead",
+    permissions: ["manage_community_events", "publish_community_updates"],
+    createdBy: "usr-admin-northstar-001",
+  });
+
+  await RoleDefinition.insertMany([
+    roleVerificationOfficer,
+    roleStudentAmbassador,
+    northstarCommunityLead,
+  ]);
 
   // 12. Role Assignments (Created by Dean Robert Sterling)
   const roleAssignments = [
@@ -491,6 +651,16 @@ export async function seedDatabase(): Promise<void> {
       scopeType: "institution",
       scopeId: "inst-apex-001",
       assignedBy: "usr-admin-001",
+      status: "active",
+      createdAt: now,
+    }),
+    new RoleAssignment({
+      _id: "rass-noah-community-lead",
+      userId: "usr-officer-northstar-001",
+      roleDefinitionId: "role-northstar-community-lead",
+      scopeType: "institution",
+      scopeId: "inst-northstar-002",
+      assignedBy: "usr-admin-northstar-001",
       status: "active",
       createdAt: now,
     }),

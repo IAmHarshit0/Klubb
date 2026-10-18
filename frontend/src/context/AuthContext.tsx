@@ -7,6 +7,7 @@ interface AuthContextValue {
   userId: string;
   currentUser: User | null;
   isLoading: boolean;
+  isVerifiedAlumnus: boolean;
   switchUser: (id: string) => void;
 }
 
@@ -21,11 +22,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const data = await getMe();
-      setCurrentUser(data.user);
+      if (id === getCurrentUserId()) setCurrentUser(data.user);
     } catch {
-      setCurrentUser(null);
+      if (id === getCurrentUserId()) setCurrentUser(null);
     } finally {
-      setIsLoading(false);
+      if (id === getCurrentUserId()) setIsLoading(false);
     }
   }, []);
 
@@ -39,8 +40,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null);
   }, []);
 
+  const isVerifiedAlumnus = Boolean(
+    currentUser?.affiliations?.some(
+      (affiliation) =>
+        affiliation.role === 'Alumnus' &&
+        affiliation.verificationStatus === 'institution-verified'
+    )
+  );
+
   return (
-    <AuthContext.Provider value={{ userId, currentUser, isLoading, switchUser }}>
+    <AuthContext.Provider value={{ userId, currentUser, isLoading, isVerifiedAlumnus, switchUser }}>
       {children}
     </AuthContext.Provider>
   );

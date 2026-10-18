@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
-import { authenticateUser } from "../auth/middleware.js";
+import { authenticateUser, requireVerifiedAlumnus } from "../auth/middleware.js";
 import {
   User,
   Affiliation,
@@ -14,7 +14,7 @@ import { AppError } from "../../shared/errors.js";
 export const discoveryRouter = Router();
 
 // GET /api/discover/people
-discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const viewer = req.user!;
     const { q, company, role, skill, institution, programme, batch } = req.query as Record<string, string>;
@@ -83,6 +83,16 @@ discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, r
       UserConnectionPreferences.find({ userId: { $in: userIds } }),
     ]);
 
+    const verifiedAlumniIds = new Set(
+      affiliations
+        .filter(
+          (affiliation) =>
+            affiliation.role === "Alumnus" &&
+            affiliation.verificationStatus === "institution-verified"
+        )
+        .map((affiliation) => affiliation.userId)
+    );
+
     const affMap = new Map<string, any[]>();
     for (const aff of affiliations) {
       if (!affMap.has(aff.userId)) affMap.set(aff.userId, []);
@@ -119,14 +129,16 @@ discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, r
           jobTitle: c.jobTitle,
           status: c.status,
         })),
-        availability: prefs
-          ? {
-              mentorship: prefs.availableForMentorship,
-              referrals: prefs.availableForReferrals,
-              questions: prefs.availableForQuestions,
-              paused: prefs.pauseIncomingRequests,
-            }
-          : { mentorship: true, referrals: true, questions: true, paused: false },
+        ...(verifiedAlumniIds.has(u._id) && {
+          availability: prefs
+            ? {
+                mentorship: prefs.availableForMentorship,
+                referrals: prefs.availableForReferrals,
+                questions: prefs.availableForQuestions,
+                paused: prefs.pauseIncomingRequests,
+              }
+            : { mentorship: true, referrals: true, questions: true, paused: false },
+        }),
       };
     });
 
@@ -137,7 +149,7 @@ discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, r
 });
 
 // GET /api/discover/organisations
-discoveryRouter.get("/discover/organisations", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/organisations", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const q = req.query.q as string;
     const query: any = {};
@@ -218,4 +230,3 @@ discoveryRouter.patch("/organisations/:id/verification", authenticateUser, async
     next(err);
   }
 });
-

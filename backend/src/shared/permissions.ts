@@ -25,6 +25,16 @@ export async function canViewProfile(viewerId: string, targetUserId: string): Pr
   return !(await isBlocked(viewerId, targetUserId));
 }
 
+export async function hasVerifiedAlumniAffiliation(userId: string): Promise<boolean> {
+  const affiliation = await Affiliation.findOne({
+    userId,
+    role: "Alumnus",
+    status: "active",
+    verificationStatus: "institution-verified",
+  });
+  return !!affiliation;
+}
+
 export async function canViewPost(viewer: IUser | null, post: IPost): Promise<boolean> {
   // 1. Mutual block check
   if (viewer) {
@@ -158,4 +168,3 @@ export async function hasInstitutionPermission(
 
   return roles.some((r) => r.permissions.includes(requiredPermission) || r.permissions.includes("*"));
 }
-
