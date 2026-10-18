@@ -106,8 +106,14 @@ export function GroupPage() {
 
           <div>
             {isMember ? (
-              <span className="px-4 py-2 bg-green-50 text-green-700 text-xs font-bold rounded-xl border border-green-200">
-                Active Member ({membership.role})
+              <span className={`px-4 py-2 text-xs font-bold rounded-xl border ${
+                (membership as any)?.isSuperAdmin
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-green-50 text-green-700 border-green-200'
+              }`}>
+                {(membership as any)?.isSuperAdmin
+                  ? 'Institution Superadmin (Full Access)'
+                  : `Active Member (${membership.role})`}
               </span>
             ) : (
               <Button
@@ -124,7 +130,11 @@ export function GroupPage() {
       {/* Post Composer if Member */}
       {isMember ? (
         <div className="mercury-card p-6 mb-8">
-          <h2 className="text-sm font-bold text-mercury-black mb-3">Publish to this Group</h2>
+          <h2 className="text-sm font-bold text-mercury-black mb-3">
+            {(membership as any)?.isSuperAdmin
+              ? 'Publish to this Group (Superadmin Access)'
+              : 'Publish to this Group'}
+          </h2>
           <Textarea
             placeholder="Share an update or question with group members..."
             value={postText}

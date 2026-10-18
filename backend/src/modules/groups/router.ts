@@ -7,8 +7,11 @@ import {
   GroupAccessRequest,
   Post,
   User,
+  Affiliation,
+  Conversation,
+  Message,
 } from "../../shared/models.js";
-import { canModerateGroup } from "../../shared/permissions.js";
+import { canModerateGroup, isInstitutionAdmin } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 
 export const groupsRouter = Router();
@@ -24,16 +27,31 @@ groupsRouter.get("/groups/:groupId", authenticateUser, async (req: Request, res:
       status: "active",
     });
 
-    const isMember = await Membership.findOne({
+    const isInstAdmin = await isInstitutionAdmin(req.user!._id, group.institutionId);
+
+    let isMember = await Membership.findOne({
       userId: req.user!._id,
       groupId: group._id,
       status: "active",
     });
 
+    if (isInstAdmin) {
+      isMember = {
+        ...(isMember ? isMember.toObject() : {}),
+        _id: isMember?._id || `admin-perm-${req.user!._id}`,
+        userId: req.user!._id,
+        groupId: group._id,
+        role: "admin",
+        status: "active",
+        isSuperAdmin: true,
+      } as any;
+    }
+
     res.json({
       group,
       memberCount,
       membership: isMember || null,
+      isInstitutionAdmin: isInstAdmin,
     });
   } catch (err) {
     next(err);
@@ -48,6 +66,12 @@ groupsRouter.post("/groups/:groupId/access-requests", authenticateUser, async (r
 
     const group = await Group.findById(groupId);
     if (!group) return next(new AppError("Group not found", 404));
+
+    // Check if institution admin (superadmin already has full access)
+    const isInstAdmin = await isInstitutionAdmin(requesterId, group.institutionId);
+    if (isInstAdmin) {
+      return next(new AppError("Superadmins already have full administrative access to this group", 400));
+    }
 
     // Check if already active member
     const existingMember = await Membership.findOne({
@@ -78,6 +102,78 @@ groupsRouter.post("/groups/:groupId/access-requests", authenticateUser, async (r
     });
 
     await request.save();
+
+    // Send access request notification to the institution's superadmin(s) in Messages
+    try {
+      const adminAffs = await Affiliation.find({
+        institutionId: group.institutionId,
+        role: "Admin",
+        status: "active",
+      });
+
+      const { RoleAssignment, RoleDefinition } = await import("../../shared/models.js");
+      const assignments = await RoleAssignment.find({
+        status: "active",
+        scopeType: "institution",
+        scopeId: group.institutionId,
+      });
+
+      const adminUserIds = new Set<string>(adminAffs.map((a) => a.userId));
+
+      if (assignments.length > 0) {
+        const roleDefIds = assignments.map((a) => a.roleDefinitionId);
+        const roles = await RoleDefinition.find({ _id: { $in: roleDefIds } });
+        const adminRoleIds = new Set(
+          roles
+            .filter((r) => r.permissions.includes("*") || r.permissions.includes("admin") || r.permissions.includes("manage_groups"))
+            .map((r) => r._id)
+        );
+        for (const a of assignments) {
+          if (adminRoleIds.has(a.roleDefinitionId)) {
+            adminUserIds.add(a.userId);
+          }
+        }
+      }
+
+      const requesterName = req.user!.name || "A student";
+      const requesterEmail = req.user!.email ? ` (${req.user!.email})` : "";
+      const noticeText = `[Group Access Request] ${requesterName}${requesterEmail} requested access to join group "${group.name}". (Request ID: ${request._id})`;
+
+      const now = new Date();
+      for (const adminId of adminUserIds) {
+        if (adminId === requesterId) continue;
+
+        const [id1, id2] = [requesterId, adminId].sort();
+        const conversationKey = `${id1}_${id2}`;
+
+        let conv = await Conversation.findOne({ conversationKey });
+        if (!conv) {
+          conv = new Conversation({
+            _id: `conv-${crypto.randomBytes(6).toString("hex")}`,
+            conversationKey,
+            participantIds: [id1, id2],
+            createdAt: now,
+            lastMessageAt: now,
+          });
+          await conv.save();
+        } else {
+          conv.lastMessageAt = now;
+          await conv.save();
+        }
+
+        const msg = new Message({
+          _id: `msg-${crypto.randomBytes(6).toString("hex")}`,
+          conversationId: conv._id,
+          senderId: requesterId,
+          text: noticeText,
+          createdAt: now,
+        });
+        await msg.save();
+      }
+    } catch (notifyErr) {
+      console.error("Failed to deliver group access request message to institution superadmin:", notifyErr);
+    }
+
     res.status(201).json({ request });
   } catch (err) {
     next(err);
@@ -140,16 +236,17 @@ groupsRouter.post("/groups/:groupId/posts", authenticateUser, async (req: Reques
     const group = await Group.findById(groupId);
     if (!group) return next(new AppError("Group not found", 404));
 
+    const isInstAdmin = await isInstitutionAdmin(req.user!._id, group.institutionId);
     const membership = await Membership.findOne({
       userId: req.user!._id,
       groupId,
       status: "active",
     });
-    if (!membership) {
+    if (!membership && !isInstAdmin) {
       return next(new AppError("You must be an active member to post to this group", 403));
     }
 
-    if (group.postingPolicy === "moderators_only" && !["moderator", "supervisor", "admin"].includes(membership.role)) {
+    if (!isInstAdmin && group.postingPolicy === "moderators_only" && !["moderator", "supervisor", "admin"].includes(membership?.role || "")) {
       return next(new AppError("Only group moderators can post to this group", 403));
     }
 
@@ -180,12 +277,13 @@ groupsRouter.get("/groups/:groupId/posts", authenticateUser, async (req: Request
     if (!group) return next(new AppError("Group not found", 404));
 
     if (group.visibility === "restricted") {
+      const isInstAdmin = await isInstitutionAdmin(req.user!._id, group.institutionId);
       const membership = await Membership.findOne({
         userId: req.user!._id,
         groupId,
         status: "active",
       });
-      if (!membership) {
+      if (!membership && !isInstAdmin) {
         return next(new AppError("You must be an active member to view posts in this group", 403));
       }
     }

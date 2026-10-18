@@ -8,6 +8,8 @@ interface AuthContextValue {
   currentUser: User | null;
   isLoading: boolean;
   isVerifiedAlumnus: boolean;
+  isStudentOnly: boolean;
+  canConfigureAvailability: boolean;
   switchUser: (id: string) => void;
 }
 
@@ -48,8 +50,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
   );
 
+  const isStudentOnly = Boolean(
+    currentUser?.affiliations &&
+      currentUser.affiliations.length > 0 &&
+      currentUser.affiliations.every((a) => a.role === 'Student') &&
+      (!currentUser.employmentClaims || currentUser.employmentClaims.length === 0)
+  );
+
+  const canConfigureAvailability = !isStudentOnly;
+
   return (
-    <AuthContext.Provider value={{ userId, currentUser, isLoading, isVerifiedAlumnus, switchUser }}>
+    <AuthContext.Provider
+      value={{
+        userId,
+        currentUser,
+        isLoading,
+        isVerifiedAlumnus,
+        isStudentOnly,
+        canConfigureAvailability,
+        switchUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -9,17 +9,32 @@ import {
   resetTopicMap,
   updateInterests,
 } from '../api/users';
+import { getMyPosts, deletePost } from '../api/posts';
 import { useToast } from '../components/ui/Toast';
 import { Button } from '../components/ui/Button';
 import { InstitutionBadge, EmploymentBadge } from '../components/ui/Badge';
 import { PageSpinner } from '../components/ui/Spinner';
-import { RotateCcw, UserCheck, Building, Briefcase, X, VolumeX } from 'lucide-react';
+import {
+  RotateCcw,
+  UserCheck,
+  Building,
+  Briefcase,
+  X,
+  VolumeX,
+  FileText,
+  Trash2,
+  Heart,
+  MessageSquare,
+  Globe,
+  Users,
+  Clock,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function MyProfilePage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { userId, isVerifiedAlumnus } = useAuth();
+  const { userId, isVerifiedAlumnus, canConfigureAvailability } = useAuth();
 
   const { data, isLoading } = useQuery({
     queryKey: ['me', userId],
@@ -34,6 +49,27 @@ export function MyProfilePage() {
   } = useQuery({
     queryKey: ['topic-map', userId],
     queryFn: getTopicMap,
+  });
+
+  const {
+    data: myPostsData,
+    isLoading: loadingMyPosts,
+  } = useQuery({
+    queryKey: ['my-posts', userId],
+    queryFn: getMyPosts,
+  });
+
+  const myPosts = myPostsData?.posts || [];
+  const [postAudienceFilter, setPostAudienceFilter] = useState<'all' | 'campus' | 'group' | 'public'>('all');
+
+  const deletePostMutation = useMutation({
+    mutationFn: (postId: string) => deletePost(postId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-posts', userId] });
+      queryClient.invalidateQueries({ queryKey: ['topic-map', userId] });
+      toast('Post deleted successfully', 'success');
+    },
+    onError: (e: any) => toast(e.message || 'Failed to delete post', 'error'),
   });
 
   const user = data?.user;
@@ -200,6 +236,137 @@ export function MyProfilePage() {
         </div>
       </div>
 
+      {/* My Published Posts Section */}
+      <section className="mercury-card p-6 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5 border-b border-mercury-gray-100 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-mercury-gray-100 rounded-xl text-mercury-black">
+              <FileText size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-mercury-black">My Published Posts</h2>
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-mercury-gray-100 text-mercury-gray-700">
+                  {myPosts.length}
+                </span>
+              </div>
+              <p className="text-xs text-mercury-gray-500 mt-0.5">
+                Posts you author are delivered across discovery feeds to peers and archived here on your profile.
+              </p>
+            </div>
+          </div>
+
+          {/* Filter pills */}
+          <div className="flex items-center gap-1.5 self-start sm:self-auto bg-mercury-gray-50 p-1 rounded-xl border border-mercury-gray-200">
+            {(['all', 'campus', 'group', 'public'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setPostAudienceFilter(filter)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg capitalize transition-colors ${
+                  postAudienceFilter === filter
+                    ? 'bg-mercury-black text-white shadow-sm'
+                    : 'text-mercury-gray-600 hover:text-mercury-black'
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loadingMyPosts ? (
+          <p className="text-xs text-mercury-gray-400 py-6 text-center">Loading your posts...</p>
+        ) : myPosts.filter((p) => postAudienceFilter === 'all' || p.audienceType === postAudienceFilter).length === 0 ? (
+          <div className="p-8 text-center text-mercury-gray-400 bg-mercury-gray-50 rounded-2xl border border-dashed border-mercury-gray-200">
+            <FileText size={28} className="mx-auto mb-2 text-mercury-gray-300" />
+            <p className="text-sm font-semibold text-mercury-black mb-1">
+              {postAudienceFilter === 'all'
+                ? 'No posts published yet'
+                : `No ${postAudienceFilter} posts found`}
+            </p>
+            <p className="text-xs max-w-sm mx-auto text-mercury-gray-500">
+              Share updates, research, or announcements from the feed composer or your groups to see them cataloged here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {myPosts
+              .filter((p) => postAudienceFilter === 'all' || p.audienceType === postAudienceFilter)
+              .map((post) => (
+                <div
+                  key={post.id}
+                  className="p-5 rounded-2xl border border-mercury-gray-200 bg-white hover:border-mercury-gray-300 transition-shadow shadow-mercury-xs"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-mercury-gray-100 text-mercury-gray-700 capitalize">
+                        {post.audienceType === 'campus' && <Building size={11} />}
+                        {post.audienceType === 'group' && <Users size={11} />}
+                        {post.audienceType === 'public' && <Globe size={11} />}
+                        {post.audienceType}
+                        {post.audienceId ? ` · ${post.audienceId}` : ''}
+                      </span>
+                      <span className="text-[11px] text-mercury-gray-400 flex items-center gap-1">
+                        <Clock size={11} />
+                        {new Date(post.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      title="Delete Post"
+                      aria-label="Delete Post"
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this post?')) {
+                          deletePostMutation.mutate(post.id);
+                        }
+                      }}
+                      disabled={deletePostMutation.isPending}
+                      className="p-1.5 text-mercury-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  <p className="text-sm text-mercury-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {post.text}
+                  </p>
+
+                  {post.topicLabels && post.topicLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {post.topicLabels.map((topic) => (
+                        <span
+                          key={topic}
+                          className="px-2 py-0.5 rounded-md bg-mercury-gray-50 text-[11px] text-mercury-gray-600 font-medium border border-mercury-gray-100"
+                        >
+                          #{topic}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-mercury-gray-100 text-xs text-mercury-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Heart size={13} className="text-mercury-gray-400" />
+                      {post.likeCount || 0} reaction{post.likeCount !== 1 ? 's' : ''}
+                    </span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1">
+                      <MessageSquare size={13} className="text-mercury-gray-400" />
+                      {post.commentCount || 0} comment{post.commentCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </section>
+
       <section className="mercury-card p-6 mb-8">
         <div className="mb-4">
           <h2 className="text-base font-bold text-mercury-black">Your interests</h2>
@@ -329,7 +496,7 @@ export function MyProfilePage() {
       </section>
 
       {/* Connection Preferences Panel */}
-      {isVerifiedAlumnus ? (
+      {canConfigureAvailability ? (
       <div className="mercury-card p-6 mb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
@@ -408,7 +575,7 @@ export function MyProfilePage() {
         <div className="mercury-card p-6 mb-8">
           <h2 className="text-base font-bold text-mercury-black">Discovery & Availability</h2>
           <p className="text-xs text-mercury-gray-500 mt-1">
-            These settings are available to members with an active, institution-verified alumni affiliation.
+            Availability flags (mentorship, referrals, open to questions) are active for alumni, faculty, leadership, and industry partners. You can discover and connect with these members from the Discover page.
           </p>
         </div>
       )}

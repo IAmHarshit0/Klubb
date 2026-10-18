@@ -15,7 +15,7 @@ import { normalizeTopic, recordTopicSignal } from "../../shared/topic-interests.
 export const discoveryRouter = Router();
 
 // GET /api/discover/people
-discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const viewer = req.user!;
     const { q, company, role, skill, institution, programme, batch } = req.query as Record<string, string>;
@@ -84,16 +84,6 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
       UserConnectionPreferences.find({ userId: { $in: userIds } }),
     ]);
 
-    const verifiedAlumniIds = new Set(
-      affiliations
-        .filter(
-          (affiliation) =>
-            affiliation.role === "Alumnus" &&
-            affiliation.verificationStatus === "institution-verified"
-        )
-        .map((affiliation) => affiliation.userId)
-    );
-
     const affMap = new Map<string, any[]>();
     for (const aff of affiliations) {
       if (!affMap.has(aff.userId)) affMap.set(aff.userId, []);
@@ -104,6 +94,19 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
     for (const cl of employmentClaims) {
       if (!claimMap.has(cl.userId)) claimMap.set(cl.userId, []);
       claimMap.get(cl.userId)!.push(cl);
+    }
+
+    const nonStudentUserIds = new Set(
+      affiliations
+        .filter((a) => a.role !== "Student")
+        .map((a) => a.userId)
+    );
+    for (const u of matchedUsers) {
+      const uAffs = affMap.get(u._id) || [];
+      const uClaims = claimMap.get(u._id) || [];
+      if (uAffs.length === 0 && uClaims.length > 0) {
+        nonStudentUserIds.add(u._id);
+      }
     }
 
     const prefMap = new Map(connectionPrefs.map((p) => [p.userId, p]));
@@ -130,7 +133,7 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
           jobTitle: c.jobTitle,
           status: c.status,
         })),
-        ...(verifiedAlumniIds.has(u._id) && {
+        ...(nonStudentUserIds.has(u._id) && {
           availability: prefs
             ? {
                 mentorship: prefs.availableForMentorship,
@@ -161,7 +164,7 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
 });
 
 // GET /api/discover/organisations
-discoveryRouter.get("/discover/organisations", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/organisations", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const q = req.query.q as string;
     const query: any = {};

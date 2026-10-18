@@ -70,6 +70,9 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
     // 3. Pre-ranking permission and mute/hide filter
     const eligiblePosts = [];
     for (const post of candidatePool) {
+      // Exclude user's own posts from discovery feed (users retrieve their posts in Profile)
+      if (post.authorId === viewer._id) continue;
+
       if (hiddenPostIds.has(post._id)) continue;
       if (mutedAuthors.has(post.authorId)) continue;
       if (post.topicLabels.some((tl) => mutedTopics.has(normalizeTopic(tl)))) continue;

@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Comment } from '../types/api';
+import type { Comment, Post } from '../types/api';
 
 export interface CreatePostData {
   text: string;
@@ -10,6 +10,11 @@ export interface CreatePostData {
   media?: string[];
 }
 
+export interface MyPostItem extends Post {
+  commentCount?: number;
+  likeCount?: number;
+}
+
 export async function createPost(data: CreatePostData) {
   const response = await api.post('/posts', data);
   return response.data;
@@ -17,6 +22,16 @@ export async function createPost(data: CreatePostData) {
 
 export async function getPost(postId: string) {
   const response = await api.get(`/posts/${postId}`);
+  return response.data;
+}
+
+export async function getMyPosts(): Promise<{ posts: MyPostItem[] }> {
+  const response = await api.get<{ posts: MyPostItem[] }>('/posts/me');
+  return response.data;
+}
+
+export async function deletePost(postId: string): Promise<{ message: string; postId: string }> {
+  const response = await api.delete<{ message: string; postId: string }>(`/posts/${postId}`);
   return response.data;
 }
 

@@ -6,7 +6,15 @@ import {
   getInstitutionTree,
   getMyAnnouncements,
   createInstitutionGroup,
+  getInstitutionRoles,
+  getInstitutionRoleAssignments,
+  createInstitutionRole,
+  assignInstitutionRole,
+  getVerifiedMembers,
   Announcement,
+  RoleDefinition,
+  RoleAssignment,
+  VerifiedMember,
 } from '../api/institutions';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -25,6 +33,10 @@ import {
   ShieldCheck,
   FolderTree,
   Sparkles,
+  UserCheck,
+  Award,
+  KeyRound,
+  CheckCircle2,
 } from 'lucide-react';
 import type { Group } from '../types/api';
 
@@ -34,7 +46,7 @@ export function InstitutionsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'communities' | 'announcements'>('communities');
+  const [activeTab, setActiveTab] = useState<'communities' | 'announcements' | 'governance'>('communities');
   const [selectedInstId, setSelectedInstId] = useState<string>('inst-apex-001');
 
   // Create group modal state
@@ -46,6 +58,18 @@ export function InstitutionsPage() {
   const [visibility, setVisibility] = useState<'public' | 'campus_only' | 'restricted'>(
     'campus_only'
   );
+
+  // Role creation & assignment modals state
+  const [createRoleOpen, setCreateRoleOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([
+    'verify_affiliation',
+    'publish_announcement',
+  ]);
+
+  const [assignRoleOpen, setAssignRoleOpen] = useState(false);
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
+  const [selectedRoleId, setSelectedRoleId] = useState('');
 
   // 1. Fetch institutions
   const { data: instData, isLoading: loadingInsts } = useQuery({
@@ -69,8 +93,36 @@ export function InstitutionsPage() {
     queryFn: getMyAnnouncements,
   });
 
+  // 4. Fetch Roles & Role Assignments for the institution
+  const { data: rolesData, isLoading: loadingRoles } = useQuery({
+    queryKey: ['institution-roles', activeInstitution?._id || selectedInstId],
+    queryFn: () => getInstitutionRoles(activeInstitution?._id || selectedInstId),
+    enabled: !!(activeInstitution?._id || selectedInstId),
+  });
+
+  const { data: assignmentsData, isLoading: loadingAssignments } = useQuery({
+    queryKey: ['institution-role-assignments', activeInstitution?._id || selectedInstId],
+    queryFn: () => getInstitutionRoleAssignments(activeInstitution?._id || selectedInstId),
+    enabled: !!(activeInstitution?._id || selectedInstId),
+  });
+
+  // 5. Fetch Verified Members for assignment dropdown
+  const { data: membersData } = useQuery({
+    queryKey: ['institution-verified-members', activeInstitution?._id || selectedInstId],
+    queryFn: () => getVerifiedMembers(activeInstitution?._id || selectedInstId),
+    enabled: !!(activeInstitution?._id || selectedInstId),
+  });
+
   const announcements = annData?.announcements || [];
   const tree = treeData?.tree;
+  const roles = rolesData?.roles || [];
+  const roleAssignments = assignmentsData?.roleAssignments || [];
+  const verifiedMembers = membersData?.members || [];
+
+  // Superadmin check
+  const isSuperAdmin = currentUser?.affiliations?.some(
+    (a) => a.institutionId === (activeInstitution?._id || selectedInstId) && a.role === 'Admin'
+  );
 
   // Create group mutation
   const createGroupMutation = useMutation({
@@ -89,6 +141,33 @@ export function InstitutionsPage() {
     onError: (e: any) => toast(e.message, 'error'),
   });
 
+  // Create role mutation
+  const createRoleMutation = useMutation({
+    mutationFn: (data: { name: string; permissions: string[] }) =>
+      createInstitutionRole(activeInstitution?._id || selectedInstId, data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['institution-roles'] });
+      toast(`Role "${data.roleDefinition.name}" defined successfully!`, 'success');
+      setCreateRoleOpen(false);
+      setNewRoleName('');
+    },
+    onError: (e: any) => toast(e.message, 'error'),
+  });
+
+  // Assign role mutation
+  const assignRoleMutation = useMutation({
+    mutationFn: (data: { userId: string; roleDefinitionId: string }) =>
+      assignInstitutionRole(activeInstitution?._id || selectedInstId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['institution-role-assignments'] });
+      toast('Role assigned successfully to member!', 'success');
+      setAssignRoleOpen(false);
+      setSelectedTargetUserId('');
+      setSelectedRoleId('');
+    },
+    onError: (e: any) => toast(e.message, 'error'),
+  });
+
   const handleCreateGroup = () => {
     if (!groupName.trim()) {
       toast('Please enter a group name', 'error');
@@ -99,6 +178,34 @@ export function InstitutionsPage() {
       groupType,
       visibility,
     });
+  };
+
+  const handleCreateRole = () => {
+    if (!newRoleName.trim()) {
+      toast('Please enter a role name', 'error');
+      return;
+    }
+    createRoleMutation.mutate({
+      name: newRoleName.trim(),
+      permissions: selectedPermissions,
+    });
+  };
+
+  const handleAssignRole = () => {
+    if (!selectedTargetUserId || !selectedRoleId) {
+      toast('Please select both a person and a role', 'error');
+      return;
+    }
+    assignRoleMutation.mutate({
+      userId: selectedTargetUserId,
+      roleDefinitionId: selectedRoleId,
+    });
+  };
+
+  const togglePermission = (perm: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    );
   };
 
   if (loadingInsts || (loadingTree && !treeData)) return <PageSpinner />;
@@ -132,6 +239,16 @@ export function InstitutionsPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isSuperAdmin && (
+              <Button
+                variant="secondary"
+                onClick={() => setCreateRoleOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Award size={15} />
+                Define Role
+              </Button>
+            )}
             <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
               <Plus size={15} />
               Create Community
@@ -164,6 +281,21 @@ export function InstitutionsPage() {
             {announcements.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-mercury-black text-white text-[10px] font-bold">
                 {announcements.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('governance')}
+            className={`feed-tab flex items-center gap-2 ${
+              activeTab === 'governance' ? 'active' : ''
+            }`}
+          >
+            <ShieldCheck size={15} />
+            <span>Leadership & Roles</span>
+            {roleAssignments.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold">
+                {roleAssignments.length}
               </span>
             )}
           </button>
@@ -276,6 +408,156 @@ export function InstitutionsPage() {
         </div>
       )}
 
+      {/* Tab 3: Leadership & Delegated Roles */}
+      {activeTab === 'governance' && (
+        <div className="space-y-8">
+          {/* Header & Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] tracking-widest font-black uppercase text-purple-700">
+                  Institutional RBAC
+                </span>
+                <span className="text-purple-300">·</span>
+                <span className="text-xs text-purple-600 font-medium">Campus Network Spec §4.3</span>
+              </div>
+              <h2 className="text-lg font-bold text-mercury-black">Delegated Roles & Governance</h2>
+              <p className="text-xs text-mercury-gray-600 mt-0.5">
+                Super Admins define institutional roles and delegate them to verified alumni, students, or staff.
+              </p>
+            </div>
+            {isSuperAdmin && (
+              <div className="flex items-center gap-2.5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCreateRoleOpen(true)}
+                  className="bg-white flex items-center gap-1.5"
+                >
+                  <Award size={14} />
+                  Define Role
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setAssignRoleOpen(true)}
+                  className="flex items-center gap-1.5"
+                >
+                  <UserCheck size={14} />
+                  Assign Role to Member
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Active Delegated Role Assignments */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500 flex items-center gap-1.5">
+                <Users size={14} />
+                Current Role Holders ({roleAssignments.length})
+              </h3>
+            </div>
+
+            {roleAssignments.length === 0 ? (
+              <div className="mercury-card p-8 text-center text-mercury-gray-400">
+                <Award size={24} className="mx-auto mb-2 text-mercury-gray-300" />
+                <p className="text-sm font-semibold text-mercury-black">No roles assigned yet</p>
+                <p className="text-xs mt-1">Super administrators can assign defined roles to verified campus people.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {roleAssignments.map((assignment) => (
+                  <div key={assignment._id} className="mercury-card p-5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                          <Award size={11} />
+                          {assignment.roleName}
+                        </span>
+                        <span className="text-[10px] text-mercury-gray-400 font-mono">
+                          {new Date(assignment.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 mt-3">
+                        <div className="w-10 h-10 rounded-full bg-mercury-black text-white flex items-center justify-center font-bold text-sm">
+                          {assignment.userName.charAt(0)}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-mercury-black">{assignment.userName}</h4>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-mercury-gray-500 font-medium">
+                              {assignment.userRole || 'User'}
+                            </span>
+                            {assignment.verificationStatus === 'institution-verified' && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                                <CheckCircle2 size={11} />
+                                Verified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {assignment.permissions.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-mercury-gray-100">
+                          <p className="text-[10px] uppercase font-bold text-mercury-gray-400 mb-1.5 tracking-wider">
+                            Granted Permissions
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {assignment.permissions.map((perm) => (
+                              <span
+                                key={perm}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-mercury-gray-100 text-mercury-gray-700 font-mono"
+                              >
+                                {perm}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Defined Roles in the Institution */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500 flex items-center gap-1.5">
+                <KeyRound size={14} />
+                Defined Role Templates ({roles.length})
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {roles.map((r) => (
+                <div key={r._id} className="mercury-card p-4 flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-mercury-black mb-1">{r.name}</h4>
+                    <p className="text-[11px] text-mercury-gray-500 mb-2 font-mono">
+                      Scope: {r.institutionId}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {r.permissions.map((p) => (
+                        <span
+                          key={p}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-mono"
+                        >
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Group Modal */}
       <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Create New Community" size="md">
         <div className="space-y-4">
@@ -332,6 +614,116 @@ export function InstitutionsPage() {
               onClick={handleCreateGroup}
             >
               Create Community
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Define Role Modal (Super Admin) */}
+      <Modal isOpen={createRoleOpen} onClose={() => setCreateRoleOpen(false)} title="Define Institutional Role" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Role Name"
+            placeholder="e.g. Placement Officer, Alumni Coordinator, Ethics Reviewer"
+            value={newRoleName}
+            onChange={(e) => setNewRoleName(e.target.value)}
+          />
+
+          <div>
+            <label className="block text-xs font-semibold text-mercury-gray-700 mb-1.5 uppercase tracking-wide">
+              Select Permissions to Grant
+            </label>
+            <div className="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl border border-mercury-gray-100 bg-mercury-gray-50">
+              {[
+                { id: 'verify_affiliation', label: 'Verify Affiliations (Student & Faculty)' },
+                { id: 'verify_employment', label: 'Verify Employer Claims' },
+                { id: 'publish_announcement', label: 'Publish Official Campus Announcements' },
+                { id: 'moderate_student_groups', label: 'Moderate Student Communities' },
+                { id: 'host_campus_events', label: 'Host & Authorize Campus Events' },
+                { id: 'view_audit_logs', label: 'View Governance Audit Logs' },
+              ].map((p) => (
+                <label key={p.id} className="flex items-center gap-2.5 text-xs text-mercury-black cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedPermissions.includes(p.id)}
+                    onChange={() => togglePermission(p.id)}
+                    className="rounded border-mercury-gray-300 text-mercury-black focus:ring-mercury-black"
+                  />
+                  <span>{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3">
+            <Button variant="secondary" size="sm" onClick={() => setCreateRoleOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              loading={createRoleMutation.isPending}
+              disabled={!newRoleName.trim()}
+              onClick={handleCreateRole}
+            >
+              Define Role
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Assign Role Modal (Super Admin) */}
+      <Modal isOpen={assignRoleOpen} onClose={() => setAssignRoleOpen(false)} title="Assign Role to Verified Person" size="md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-mercury-gray-700 mb-1.5 uppercase tracking-wide">
+              Select Verified Person (Defaults to User if unassigned)
+            </label>
+            <select
+              value={selectedTargetUserId}
+              onChange={(e) => setSelectedTargetUserId(e.target.value)}
+              className="mercury-input"
+            >
+              <option value="">-- Choose a person --</option>
+              {verifiedMembers.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name} ({m.role || 'User'} · {m.department || m.programme || 'General'} · {m.verificationStatus})
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-mercury-gray-400 mt-1">
+              Supports verified alumni, students, faculty, or registered campus users.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-mercury-gray-700 mb-1.5 uppercase tracking-wide">
+              Role to Assign
+            </label>
+            <select
+              value={selectedRoleId}
+              onChange={(e) => setSelectedRoleId(e.target.value)}
+              className="mercury-input"
+            >
+              <option value="">-- Choose defined role --</option>
+              {roles.map((r) => (
+                <option key={r._id} value={r._id}>
+                  {r.name} ({r.permissions.length} permissions)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3">
+            <Button variant="secondary" size="sm" onClick={() => setAssignRoleOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              loading={assignRoleMutation.isPending}
+              disabled={!selectedTargetUserId || !selectedRoleId}
+              onClick={handleAssignRole}
+            >
+              Confirm Assignment
             </Button>
           </div>
         </div>

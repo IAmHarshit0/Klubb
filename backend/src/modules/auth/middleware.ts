@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { User, IUser } from "../../shared/models.js";
 import { config } from "../../config/index.js";
 import { AppError } from "../../shared/errors.js";
-import { hasVerifiedAlumniAffiliation } from "../../shared/permissions.js";
+import { hasVerifiedAlumniAffiliation, canConfigureAvailability } from "../../shared/permissions.js";
 
 declare global {
   namespace Express {
@@ -35,6 +35,26 @@ export async function authenticateUser(
 
   req.user = user;
   next();
+}
+
+export async function requireNonStudent(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> {
+  if (!req.user) {
+    return next(new AppError("User not found or unauthenticated", 401));
+  }
+
+  try {
+    const isAllowed = await canConfigureAvailability(req.user._id);
+    if (!isAllowed) {
+      return next(new AppError("Availability settings are available for non-student profiles only", 403));
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 export async function requireVerifiedAlumnus(

@@ -55,13 +55,13 @@ export function DiscoveryPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['discover', 'people', userId, searchParams],
     queryFn: () => discoverPeople(searchParams),
-    enabled: isVerifiedAlumnus && !authLoading,
+    enabled: !authLoading,
   });
 
   const { data: connectionsData } = useQuery({
     queryKey: ['connections', userId],
     queryFn: () => getConnections(),
-    enabled: isVerifiedAlumnus && !authLoading,
+    enabled: !authLoading,
   });
 
   const getConnectionState = useCallback(
@@ -126,18 +126,6 @@ export function DiscoveryPage() {
   }));
 
   if (authLoading) return <PageSpinner />;
-
-  if (!isVerifiedAlumnus) {
-    return (
-      <div className="max-w-xl mx-auto px-6 py-20 text-center">
-        <ShieldAlert size={28} className="mx-auto mb-4 text-mercury-gray-400" />
-        <h1 className="text-xl font-bold text-mercury-black mb-2">Alumni-only feature</h1>
-        <p className="text-sm text-mercury-gray-500">
-          Professional discovery is available to members with an active, institution-verified alumni affiliation.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">

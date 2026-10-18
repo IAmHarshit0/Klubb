@@ -12,10 +12,7 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const { isVerifiedAlumnus } = useAuth();
-  const visibleNavItems = navItems.filter(
-    (item) => item.to !== '/discover' || isVerifiedAlumnus
-  );
+  const visibleNavItems = navItems;
 
   return (
     <nav

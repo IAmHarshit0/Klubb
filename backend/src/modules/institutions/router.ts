@@ -189,21 +189,40 @@ institutionsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const institutionId = req.params.id;
-      const { name, permissions = [], scopeType = "institution", scopeId } = req.body;
+      const { name, permissions = [], scopeType = "institution", scopeId, description } = req.body;
 
       if (!name) return next(new AppError("Role name is required", 400));
 
-      const { RoleDefinition } = await import("../../shared/models.js");
+      // Verify caller has admin/governance permission
+      const { hasInstitutionPermission } = await import("../../shared/permissions.js");
+      const isAuthorized = await hasInstitutionPermission(req.user!._id, institutionId, "manage_roles");
+      if (!isAuthorized) {
+        return next(new AppError("Only institution administrators can define roles", 403));
+      }
+
+      const { RoleDefinition, AuditEvent } = await import("../../shared/models.js");
       const roleDef = new RoleDefinition({
         _id: `role-${crypto.randomBytes(6).toString("hex")}`,
         institutionId,
         scopeType,
         scopeId: scopeId || institutionId,
-        name,
-        permissions,
+        name: name.trim(),
+        permissions: permissions.length > 0 ? permissions : ["general_access"],
         createdBy: req.user!._id,
       });
       await roleDef.save();
+
+      // Audit event
+      const audit = new AuditEvent({
+        _id: `aud-${crypto.randomBytes(6).toString("hex")}`,
+        actorId: req.user!._id,
+        action: "role_definition_created",
+        targetType: "role",
+        targetId: roleDef._id,
+        scopeId: institutionId,
+        metadata: { roleName: roleDef.name, permissions: roleDef.permissions },
+      });
+      await audit.save();
 
       res.status(201).json({ roleDefinition: roleDef });
     } catch (err) {
@@ -225,7 +244,35 @@ institutionsRouter.post(
         return next(new AppError("userId and roleDefinitionId are required", 400));
       }
 
-      const { RoleAssignment } = await import("../../shared/models.js");
+      // Verify caller has admin/governance permission
+      const { hasInstitutionPermission } = await import("../../shared/permissions.js");
+      const isAuthorized = await hasInstitutionPermission(req.user!._id, institutionId, "assign_roles");
+      if (!isAuthorized) {
+        return next(new AppError("Only institution administrators can assign roles", 403));
+      }
+
+      const { RoleAssignment, RoleDefinition, Affiliation, User, AuditEvent } = await import("../../shared/models.js");
+
+      // Verify role definition exists
+      const roleDef = await RoleDefinition.findById(roleDefinitionId);
+      if (!roleDef) {
+        return next(new AppError("Role definition not found", 404));
+      }
+
+      // Verify target user exists
+      const targetUser = await User.findById(userId);
+      if (!targetUser) {
+        return next(new AppError("Target user not found", 404));
+      }
+
+      // Check if target user has an active affiliation with this institution
+      const affiliation = await Affiliation.findOne({
+        userId,
+        institutionId,
+        status: "active",
+      });
+
+      // Assignment: default target scope is institution
       const assignment = new RoleAssignment({
         _id: `rass-${crypto.randomBytes(6).toString("hex")}`,
         userId,
@@ -238,7 +285,31 @@ institutionsRouter.post(
       });
       await assignment.save();
 
-      res.status(201).json({ roleAssignment: assignment });
+      // Audit event
+      const audit = new AuditEvent({
+        _id: `aud-${crypto.randomBytes(6).toString("hex")}`,
+        actorId: req.user!._id,
+        action: "role_assigned_to_user",
+        targetType: "role_assignment",
+        targetId: assignment._id,
+        scopeId: institutionId,
+        metadata: {
+          assignedTo: userId,
+          roleId: roleDefinitionId,
+          roleName: roleDef.name,
+          userAffiliationRole: affiliation?.role || "User",
+          verificationStatus: affiliation?.verificationStatus || "unverified",
+        },
+      });
+      await audit.save();
+
+      res.status(201).json({
+        roleAssignment: {
+          ...assignment.toObject(),
+          roleName: roleDef.name,
+          userName: targetUser.name,
+        },
+      });
     } catch (err) {
       next(err);
     }
@@ -253,7 +324,7 @@ institutionsRouter.get(
     try {
       const institutionId = req.params.id;
       const { RoleDefinition } = await import("../../shared/models.js");
-      const roles = await RoleDefinition.find({ institutionId });
+      const roles = await RoleDefinition.find({ institutionId }).sort({ createdAt: -1 });
       res.json({ roles });
     } catch (err) {
       next(err);
@@ -268,11 +339,88 @@ institutionsRouter.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const institutionId = req.params.id;
-      const { RoleAssignment } = await import("../../shared/models.js");
-      const assignments = await RoleAssignment.find({ scopeId: institutionId, status: "active" });
-      res.json({ roleAssignments: assignments });
+      const { RoleAssignment, RoleDefinition, User, Affiliation } = await import("../../shared/models.js");
+      
+      const assignments = await RoleAssignment.find({ scopeId: institutionId, status: "active" }).sort({ createdAt: -1 });
+      
+      // Populate user and role definition info
+      const userIds = [...new Set(assignments.map((a) => a.userId))];
+      const roleDefIds = [...new Set(assignments.map((a) => a.roleDefinitionId))];
+      
+      const [users, roleDefs, affiliations] = await Promise.all([
+        User.find({ _id: { $in: userIds } }),
+        RoleDefinition.find({ _id: { $in: roleDefIds } }),
+        Affiliation.find({ userId: { $in: userIds }, institutionId, status: "active" }),
+      ]);
+
+      const userMap = new Map(users.map((u) => [u._id, u]));
+      const roleDefMap = new Map(roleDefs.map((r) => [r._id, r]));
+      const affMap = new Map(affiliations.map((a) => [a.userId, a]));
+
+      const populatedAssignments = assignments.map((a) => {
+        const user = userMap.get(a.userId);
+        const role = roleDefMap.get(a.roleDefinitionId);
+        const aff = affMap.get(a.userId);
+
+        return {
+          _id: a._id,
+          userId: a.userId,
+          userName: user?.name || "Unknown User",
+          userRole: aff?.role || "User",
+          userDepartment: aff?.department || aff?.programme || "",
+          verificationStatus: aff?.verificationStatus || "unverified",
+          roleDefinitionId: a.roleDefinitionId,
+          roleName: role?.name || "Custom Role",
+          permissions: role?.permissions || [],
+          assignedBy: a.assignedBy,
+          createdAt: a.createdAt,
+        };
+      });
+
+      res.json({ roleAssignments: populatedAssignments });
     } catch (err) {
       next(err);
     }
   }
 );
+
+// GET /api/institutions/:id/verified-members
+// Returns all verified campus members (alumni, students, faculty, or users) eligible for role assignment
+institutionsRouter.get(
+  "/institutions/:id/verified-members",
+  authenticateUser,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const institutionId = req.params.id;
+      const { Affiliation, User } = await import("../../shared/models.js");
+
+      const affs = await Affiliation.find({
+        institutionId,
+        status: "active",
+      });
+
+      const userIds = affs.map((a) => a.userId);
+      const users = await User.find({ _id: { $in: userIds } });
+      const userMap = new Map(users.map((u) => [u._id, u]));
+
+      const members = affs.map((a) => {
+        const u = userMap.get(a.userId);
+        return {
+          userId: a.userId,
+          name: u?.name || "Unknown User",
+          email: u?.email || "",
+          role: a.role || "User",
+          programme: a.programme,
+          department: a.department,
+          batch: a.batch,
+          verificationStatus: a.verificationStatus,
+        };
+      });
+
+      res.json({ members });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+

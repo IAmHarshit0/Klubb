@@ -84,7 +84,7 @@ export function ProfilePage() {
       setBlockOpen(false);
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['discover'] });
-      navigate(isVerifiedAlumnus ? '/discover' : '/feed');
+      navigate('/discover');
     } catch (e: any) {
       toast(e.message, 'error');
     } finally {
@@ -119,8 +119,8 @@ export function ProfilePage() {
         <p className="text-sm text-mercury-gray-500 mb-6">
           {(error as Error)?.message || 'This profile is not accessible or has been restricted.'}
         </p>
-        <Link to={isVerifiedAlumnus ? '/discover' : '/feed'}>
-          <Button variant="secondary">{isVerifiedAlumnus ? 'Back to Discovery' : 'Back to Feed'}</Button>
+        <Link to="/discover">
+          <Button variant="secondary">Back to Discovery</Button>
         </Link>
       </div>
     );
@@ -272,7 +272,7 @@ export function ProfilePage() {
       </div>
 
       {/* Skills & Availability */}
-      <div className={`grid grid-cols-1 gap-6 mb-8 ${isVerifiedAlumnus ? 'md:grid-cols-2' : ''}`}>
+      <div className={`grid grid-cols-1 gap-6 mb-8 ${user.availability ? 'md:grid-cols-2' : ''}`}>
         {/* Skills */}
         <div className="mercury-card p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -298,46 +298,42 @@ export function ProfilePage() {
         </div>
 
         {/* Stated Availability */}
-        {isVerifiedAlumnus && (
+        {user.availability && (
         <div className="mercury-card p-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-mercury-black mb-4">
             Stated Availability
           </h2>
-          {user.availability ? (
-            user.availability.paused ? (
-              <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-xl">
-                Currently pausing new incoming connection requests.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs py-1 border-b border-mercury-gray-50">
-                  <span className="text-mercury-gray-600">Mentorship Opportunities</span>
-                  <span
-                    className={`font-semibold ${user.availability.mentorship ? 'text-green-700' : 'text-mercury-gray-400'}`}
-                  >
-                    {user.availability.mentorship ? 'Available' : 'Unavailable'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs py-1 border-b border-mercury-gray-50">
-                  <span className="text-mercury-gray-600">Company Referrals</span>
-                  <span
-                    className={`font-semibold ${user.availability.referrals ? 'text-blue-700' : 'text-mercury-gray-400'}`}
-                  >
-                    {user.availability.referrals ? 'Available' : 'Unavailable'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs py-1">
-                  <span className="text-mercury-gray-600">General Career Questions</span>
-                  <span
-                    className={`font-semibold ${user.availability.questions ? 'text-purple-700' : 'text-mercury-gray-400'}`}
-                  >
-                    {user.availability.questions ? 'Open to chat' : 'Unavailable'}
-                  </span>
-                </div>
-              </div>
-            )
+          {user.availability.paused ? (
+            <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-xl">
+              Currently pausing new incoming connection requests.
+            </p>
           ) : (
-            <p className="text-xs text-mercury-gray-400">Availability preferences not set.</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs py-1 border-b border-mercury-gray-50">
+                <span className="text-mercury-gray-600">Mentorship Opportunities</span>
+                <span
+                  className={`font-semibold ${user.availability.mentorship ? 'text-green-700' : 'text-mercury-gray-400'}`}
+                >
+                  {user.availability.mentorship ? 'Available' : 'Unavailable'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs py-1 border-b border-mercury-gray-50">
+                <span className="text-mercury-gray-600">Company Referrals</span>
+                <span
+                  className={`font-semibold ${user.availability.referrals ? 'text-blue-700' : 'text-mercury-gray-400'}`}
+                >
+                  {user.availability.referrals ? 'Available' : 'Unavailable'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs py-1">
+                <span className="text-mercury-gray-600">General Career Questions</span>
+                <span
+                  className={`font-semibold ${user.availability.questions ? 'text-purple-700' : 'text-mercury-gray-400'}`}
+                >
+                  {user.availability.questions ? 'Open to chat' : 'Unavailable'}
+                </span>
+              </div>
+            </div>
           )}
         </div>
         )}

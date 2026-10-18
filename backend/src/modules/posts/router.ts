@@ -2,11 +2,82 @@ import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { authenticateUser } from "../auth/middleware.js";
 import { Post, Comment, PostInteraction, Affiliation } from "../../shared/models.js";
-import { canViewPost, canPostToAudience } from "../../shared/permissions.js";
+import { canViewPost, canPostToAudience, isInstitutionAdmin } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 import { recordTopicSignal } from "../../shared/topic-interests.js";
 
 export const postsRouter = Router();
+
+// GET /api/posts/me - Retrieve current authenticated user's own posts for the profile section
+postsRouter.get("/posts/me", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const posts = await Post.find({ authorId: req.user!._id }).sort({ createdAt: -1 });
+
+    const primaryAff = await Affiliation.findOne({ userId: req.user!._id, status: "active" });
+
+    const postIds = posts.map((p) => p._id);
+    const commentsCount = await Comment.aggregate([
+      { $match: { postId: { $in: postIds } } },
+      { $group: { _id: "$postId", count: { $sum: 1 } } },
+    ]);
+    const likesCount = await PostInteraction.aggregate([
+      { $match: { postId: { $in: postIds }, type: "like" } },
+      { $group: { _id: "$postId", count: { $sum: 1 } } },
+    ]);
+
+    const commentCountMap = new Map(commentsCount.map((c) => [c._id, c.count]));
+    const likeCountMap = new Map(likesCount.map((l) => [l._id, l.count]));
+
+    const formatted = posts.map((p) => ({
+      id: p._id,
+      text: p.text,
+      media: p.media,
+      audienceType: p.audienceType,
+      audienceId: p.audienceId,
+      institutionId: p.institutionId,
+      topicLabels: p.topicLabels,
+      createdAt: p.createdAt,
+      commentCount: commentCountMap.get(p._id) || 0,
+      likeCount: likeCountMap.get(p._id) || 0,
+      author: {
+        id: req.user!._id,
+        name: req.user!.name,
+        role: primaryAff?.role || "Member",
+        institutionId: primaryAff?.institutionId,
+        verificationStatus: primaryAff?.verificationStatus || "unverified",
+      },
+    }));
+
+    res.json({ posts: formatted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/posts/:postId
+postsRouter.delete("/posts/:postId", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) {
+      return next(new AppError("Post not found", 404));
+    }
+
+    const isAuthor = post.authorId === req.user!._id;
+    const isInstAdmin = post.institutionId && (await isInstitutionAdmin(req.user!._id, post.institutionId));
+
+    if (!isAuthor && !isInstAdmin) {
+      return next(new AppError("You do not have permission to delete this post", 403));
+    }
+
+    await Post.findByIdAndDelete(post._id);
+    await Comment.deleteMany({ postId: post._id });
+    await PostInteraction.deleteMany({ postId: post._id });
+
+    res.json({ message: "Post successfully deleted", postId: post._id });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // POST /api/posts
 postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
