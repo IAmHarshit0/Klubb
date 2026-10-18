@@ -29,7 +29,7 @@ export function DiscoveryPage() {
 
   // Search state
   const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [filterInputs, setFilterInputs] = useState<Record<string, string>>({});
@@ -43,19 +43,18 @@ export function DiscoveryPage() {
   const [connectMsg, setConnectMsg] = useState('');
   const [connectLoading, setConnectLoading] = useState(false);
 
-  // Debounce query
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 300);
-    return () => clearTimeout(t);
-  }, [query]);
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSubmittedQuery(query.trim());
+  };
 
-  const searchParams: PeopleSearchParams = { q: debouncedQuery, ...filters };
+  const searchParams: PeopleSearchParams = { q: submittedQuery, ...filters };
   const hasSearch = Object.values(searchParams).some(Boolean);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['discover', 'people', userId, searchParams],
     queryFn: () => discoverPeople(searchParams),
-    enabled: isVerifiedAlumnus && !authLoading,
+    enabled: isVerifiedAlumnus && !authLoading && hasSearch,
   });
 
   const { data: connectionsData } = useQuery({
@@ -116,7 +115,7 @@ export function DiscoveryPage() {
     setFilters({});
     setFilterInputs({});
     setQuery('');
-    setDebouncedQuery('');
+    setSubmittedQuery('');
   };
 
   const activeFilterChips = Object.entries(filters).map(([key, value]) => ({
@@ -161,7 +160,7 @@ export function DiscoveryPage() {
       </div>
 
       {/* Search bar + filter toggle */}
-      <div className="flex gap-3 mb-4">
+      <form onSubmit={handleSearchSubmit} className="flex gap-3 mb-4">
         <div className="relative flex-1">
           <Search
             size={16}
@@ -170,13 +169,25 @@ export function DiscoveryPage() {
           <input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, skill, bio..."
-            className="mercury-input pl-10"
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (!e.target.value.trim() && submittedQuery) {
+                setSubmittedQuery('');
+              }
+            }}
+            placeholder="Search by topic, skill, company, name... (Press Enter to search)"
+            className="mercury-input pl-10 pr-24"
             aria-label="Search people"
           />
+          <button
+            type="submit"
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-mercury-black text-white text-xs font-semibold rounded-lg hover:bg-neutral-800 transition-colors shadow-sm"
+          >
+            Search
+          </button>
         </div>
         <button
+          type="button"
           onClick={() => setShowFilters(true)}
           className={`btn-secondary flex items-center gap-2 flex-shrink-0 ${
             Object.keys(filters).length > 0 ? 'border-mercury-black' : ''
@@ -191,7 +202,7 @@ export function DiscoveryPage() {
             </span>
           )}
         </button>
-      </div>
+      </form>
 
       {/* Active filter chips */}
       {activeFilterChips.length > 0 && (
@@ -213,7 +224,7 @@ export function DiscoveryPage() {
         )}
 
         {data?.results?.length === 0 && !isLoading && (
-          <SearchEmptyState query={debouncedQuery} />
+          <SearchEmptyState query={submittedQuery} />
         )}
 
         {data?.results && data.results.length > 0 && (

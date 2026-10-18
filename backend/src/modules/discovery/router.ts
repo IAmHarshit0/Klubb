@@ -144,7 +144,7 @@ discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus
     });
 
     const searchTopics = [...new Set([q, skill, role, programme]
-      .filter((topic): topic is string => Boolean(topic?.trim()))
+      .filter((topic): topic is string => Boolean(topic?.trim() && topic.trim().length >= 3))
       .map(normalizeTopic)
       .filter(Boolean))];
     const searchDay = new Date().toISOString().slice(0, 10);
