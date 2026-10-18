@@ -11,11 +11,12 @@ import {
 } from "../../shared/models.js";
 import { AppError } from "../../shared/errors.js";
 import { normalizeTopic, recordTopicSignal } from "../../shared/topic-interests.js";
+import { hasInstitutionPermission } from "../../shared/permissions.js";
 
 export const discoveryRouter = Router();
 
 // GET /api/discover/people
-discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/people", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const viewer = req.user!;
     const { q, company, role, skill, institution, programme, batch } = req.query as Record<string, string>;
@@ -164,7 +165,7 @@ discoveryRouter.get("/discover/people", authenticateUser, async (req: Request, r
 });
 
 // GET /api/discover/organisations
-discoveryRouter.get("/discover/organisations", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
+discoveryRouter.get("/discover/organisations", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const q = req.query.q as string;
     const query: any = {};
@@ -236,6 +237,21 @@ discoveryRouter.patch("/organisations/:id/verification", authenticateUser, async
 
     const org = await Organisation.findById(organisationId);
     if (!org) return next(new AppError("Organisation not found", 404));
+
+    const verifierAffiliations = await Affiliation.find({
+      userId: req.user!._id,
+      status: "active",
+      verificationStatus: "institution-verified",
+    });
+    const verificationPermissions = await Promise.all(
+      verifierAffiliations.map((affiliation) =>
+        hasInstitutionPermission(req.user!._id, affiliation.institutionId, "verify_employment")
+      )
+    );
+    const canVerify = verificationPermissions.some(Boolean);
+    if (!canVerify) {
+      return next(new AppError("Only assigned employment verifiers can verify organisations", 403));
+    }
 
     org.verificationStatus = verificationStatus;
     await org.save();

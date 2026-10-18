@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Institution, Group } from '../types/api';
+import type { Community, Institution, Group } from '../types/api';
 
 export interface InstitutionTree {
   departments: Group[];
@@ -8,6 +8,7 @@ export interface InstitutionTree {
   clubs: Group[];
   general: Group[];
   allGroups: Group[];
+  communities: Community[];
 }
 
 export interface Announcement {
@@ -51,6 +52,17 @@ export async function createInstitutionGroup(
   }
 ): Promise<{ group: Group }> {
   const response = await api.post<{ group: Group }>(`/institutions/${institutionId}/groups`, data);
+  return response.data;
+}
+
+export async function createInstitutionCommunity(
+  institutionId: string,
+  data: { name: string; suffix: string }
+): Promise<{ community: Community }> {
+  const response = await api.post<{ community: Community }>(
+    `/institutions/${institutionId}/communities`,
+    data
+  );
   return response.data;
 }
 
@@ -133,4 +145,3 @@ export async function getVerifiedMembers(
   );
   return response.data;
 }
-

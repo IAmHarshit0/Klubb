@@ -30,7 +30,7 @@ describe("Profile interests", () => {
     expect(response.body.error.message).toBe("Interests must be an array of strings");
   });
 
-  it("restricts availability settings to non-student profiles (all others)", async () => {
+  it("restricts availability settings to verified alumni", async () => {
     const studentProfile = await request(app)
       .get("/api/me")
       .set("X-User-Id", "usr-student-001");
@@ -56,6 +56,11 @@ describe("Profile interests", () => {
     const facultyPreferences = await request(app)
       .get("/api/me/connection-preferences")
       .set("X-User-Id", "usr-faculty-001");
-    expect(facultyPreferences.status).toBe(200);
+    expect(facultyPreferences.status).toBe(403);
+
+    const facultyProfile = await request(app)
+      .get("/api/me")
+      .set("X-User-Id", "usr-faculty-001");
+    expect(facultyProfile.body.user).not.toHaveProperty("connectionPreferences");
   });
 });

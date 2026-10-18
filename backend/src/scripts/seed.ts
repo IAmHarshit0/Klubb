@@ -2,6 +2,7 @@ import { connectDB, disconnectDB } from "../shared/db.js";
 import {
   User,
   Institution,
+  Community,
   Affiliation,
   EmploymentClaim,
   Group,
@@ -33,6 +34,7 @@ export async function seedDatabase(): Promise<void> {
   await Promise.all([
     User.deleteMany({}),
     Institution.deleteMany({}),
+    Community.deleteMany({}),
     Affiliation.deleteMany({}),
     EmploymentClaim.deleteMany({}),
     Group.deleteMany({}),
@@ -77,6 +79,33 @@ export async function seedDatabase(): Promise<void> {
     type: "university",
   });
   await northstarInstitute.save();
+
+  await Community.insertMany([
+    new Community({
+      _id: "com-apex-alumni",
+      institutionId: "inst-apex-001",
+      name: "Apex Alumni Network",
+      slug: "alumni-network",
+      createdBy: "usr-officer-001",
+      createdAt: now,
+    }),
+    new Community({
+      _id: "com-apex-research",
+      institutionId: "inst-apex-001",
+      name: "Apex Research Community",
+      slug: "research-community",
+      createdBy: "usr-officer-001",
+      createdAt: now,
+    }),
+    new Community({
+      _id: "com-northstar-builders",
+      institutionId: "inst-northstar-002",
+      name: "Northstar Builders",
+      slug: "builders",
+      createdBy: "usr-officer-northstar-001",
+      createdAt: now,
+    }),
+  ]);
 
   // 2. Users (Students, Alumni, Faculty, Admin)
   const users = [
@@ -786,7 +815,7 @@ export async function seedDatabase(): Promise<void> {
       "verify_affiliation",
       "verify_employment",
       "publish_announcement",
-      "view_audit_logs",
+      "create_community",
     ],
     createdBy: "usr-admin-001",
   });
@@ -811,7 +840,7 @@ export async function seedDatabase(): Promise<void> {
     scopeType: "institution",
     scopeId: "inst-northstar-002",
     name: "Community Programs Lead",
-    permissions: ["manage_community_events", "publish_community_updates"],
+    permissions: ["moderate_student_groups"],
     createdBy: "usr-admin-northstar-001",
   });
 

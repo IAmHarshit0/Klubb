@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (!currentUser.employmentClaims || currentUser.employmentClaims.length === 0)
   );
 
-  const canConfigureAvailability = !isStudentOnly;
+  const canConfigureAvailability = isVerifiedAlumnus;
 
   return (
     <AuthContext.Provider

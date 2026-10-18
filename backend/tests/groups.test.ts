@@ -1,9 +1,55 @@
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { app } from "../src/app.js";
-import { Membership } from "../src/shared/models.js";
+import { Community, Membership } from "../src/shared/models.js";
 
 describe("Groups & Access Requests", () => {
+  it("Only the institution Super Admin can create groups", async () => {
+    const studentResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/groups")
+      .set("X-User-Id", "usr-student-001")
+      .send({ name: "Student-created group" });
+    expect(studentResponse.status).toBe(403);
+
+    const officerResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/groups")
+      .set("X-User-Id", "usr-officer-001")
+      .send({ name: "Officer-created group" });
+    expect(officerResponse.status).toBe(403);
+
+    const adminResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/groups")
+      .set("X-User-Id", "usr-admin-001")
+      .send({ name: "Admin-created group" });
+    expect(adminResponse.status).toBe(201);
+    expect(adminResponse.body.group.name).toBe("Admin-created group");
+  });
+
+  it("Verification officers create communities with institution-unique suffixes", async () => {
+    const deniedResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/communities")
+      .set("X-User-Id", "usr-student-001")
+      .send({ name: "Student community", suffix: "student-community" });
+    expect(deniedResponse.status).toBe(403);
+
+    const createdResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/communities")
+      .set("X-User-Id", "usr-officer-001")
+      .send({ name: "Student Research", suffix: "student-research" });
+    expect(createdResponse.status).toBe(201);
+    expect(createdResponse.body.community.slug).toBe("student-research");
+
+    const duplicateResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/communities")
+      .set("X-User-Id", "usr-officer-001")
+      .send({ name: "Another community", suffix: "STUDENT-RESEARCH" });
+    expect(duplicateResponse.status).toBe(409);
+
+    const treeResponse = await request(app).get("/api/institutions/inst-apex-001/tree");
+    expect(treeResponse.body.tree.communities.map((community: Community) => community.slug))
+      .toEqual(expect.arrayContaining(["alumni-network", "research-community", "student-research"]));
+  });
+
   it("Non-supervisor cannot review access requests", async () => {
     // Jordan (student) tries to approve Alex's request to robotics club
     const res = await request(app)
@@ -89,4 +135,3 @@ describe("Groups & Access Requests", () => {
     expect(replyRes.body.message.text).toContain("Hello Maya");
   });
 });
-

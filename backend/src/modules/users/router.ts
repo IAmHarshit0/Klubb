@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { authenticateUser, requireNonStudent } from "../auth/middleware.js";
+import { authenticateUser, requireVerifiedAlumnus } from "../auth/middleware.js";
 import {
   User,
   Affiliation,
@@ -7,8 +7,14 @@ import {
   UserFeedPreferences,
   UserConnectionPreferences,
   UserTopicInterest,
+  RoleAssignment,
+  RoleDefinition,
 } from "../../shared/models.js";
-import { canViewProfile, canConfigureAvailability } from "../../shared/permissions.js";
+import {
+  canViewProfile,
+  canConfigureAvailability,
+  hasVerifiedAlumniAffiliation,
+} from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
 import { getUserTopicMap, normalizeTopic } from "../../shared/topic-interests.js";
 
@@ -20,6 +26,45 @@ const DEFAULT_CONNECTION_PREFERENCES = {
   availableForQuestions: true,
   pauseIncomingRequests: false,
 };
+
+async function getInstitutionRoles(userId: string) {
+  const [assignments, affiliations] = await Promise.all([
+    RoleAssignment.find({
+      userId,
+      status: "active",
+      scopeType: "institution",
+    }),
+    Affiliation.find({
+      userId,
+      status: "active",
+      verificationStatus: "institution-verified",
+    }),
+  ]);
+  const verifiedInstitutionIds = new Set(affiliations.map((affiliation) => affiliation.institutionId));
+  const activeAssignments = assignments.filter((assignment) =>
+    verifiedInstitutionIds.has(assignment.scopeId)
+  );
+  if (activeAssignments.length === 0) return [];
+
+  const roleDefinitions = await RoleDefinition.find({
+    _id: { $in: activeAssignments.map((assignment) => assignment.roleDefinitionId) },
+    scopeType: "institution",
+  });
+  const definitionsById = new Map(roleDefinitions.map((role) => [role._id, role]));
+
+  return activeAssignments.flatMap((assignment) => {
+    const role = definitionsById.get(assignment.roleDefinitionId);
+    if (!role || role.institutionId !== assignment.scopeId || role.scopeId !== assignment.scopeId) {
+      return [];
+    }
+    return [{
+      institutionId: assignment.scopeId,
+      roleDefinitionId: role._id,
+      name: role.name,
+      permissions: role.permissions,
+    }];
+  });
+}
 
 // GET /api/me
 usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
@@ -44,6 +89,7 @@ usersRouter.get("/me", authenticateUser, async (req: Request, res: Response, nex
         profileVisibility: user.profileVisibility,
         affiliations,
         employmentClaims,
+        institutionRoles: await getInstitutionRoles(user._id),
         ...(canHaveAvailability && {
           connectionPreferences: connectionPrefs || DEFAULT_CONNECTION_PREFERENCES,
         }),
@@ -77,6 +123,7 @@ usersRouter.get("/users/me", authenticateUser, async (req: Request, res: Respons
         profileVisibility: user.profileVisibility,
         affiliations,
         employmentClaims,
+        institutionRoles: await getInstitutionRoles(user._id),
         ...(canHaveAvailability && {
           connectionPreferences: connectionPrefs || DEFAULT_CONNECTION_PREFERENCES,
         }),
@@ -106,6 +153,7 @@ usersRouter.get("/users/:userId", authenticateUser, async (req: Request, res: Re
     const affiliations = await Affiliation.find({ userId: user._id, status: "active" });
     const employmentClaims = await EmploymentClaim.find({ userId: user._id });
     const targetHasAvailability = await canConfigureAvailability(user._id);
+    const viewerCanViewAvailability = await hasVerifiedAlumniAffiliation(viewer._id);
     const connectionPrefs = targetHasAvailability
       ? await UserConnectionPreferences.findOne({ userId: user._id })
       : null;
@@ -133,7 +181,7 @@ usersRouter.get("/users/:userId", authenticateUser, async (req: Request, res: Re
         jobTitle: e.jobTitle,
         status: e.status,
       })),
-      ...(targetHasAvailability && {
+      ...(targetHasAvailability && viewerCanViewAvailability && {
         availability: connectionPrefs
           ? {
               mentorship: connectionPrefs.availableForMentorship,
@@ -249,7 +297,7 @@ usersRouter.patch("/me/feed-preferences", authenticateUser, async (req: Request,
 });
 
 // GET /api/me/connection-preferences
-usersRouter.get("/me/connection-preferences", authenticateUser, requireNonStudent, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.get("/me/connection-preferences", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const prefs = await UserConnectionPreferences.findOne({ userId: req.user!._id });
     res.json(
@@ -263,7 +311,7 @@ usersRouter.get("/me/connection-preferences", authenticateUser, requireNonStuden
 });
 
 // PATCH /api/me/connection-preferences
-usersRouter.patch("/me/connection-preferences", authenticateUser, requireNonStudent, async (req: Request, res: Response, next: NextFunction) => {
+usersRouter.patch("/me/connection-preferences", authenticateUser, requireVerifiedAlumnus, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { availableForMentorship, availableForReferrals, availableForQuestions, pauseIncomingRequests } = req.body;
     let prefs = await UserConnectionPreferences.findOne({ userId: req.user!._id });

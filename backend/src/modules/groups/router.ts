@@ -61,7 +61,7 @@ groupsRouter.get("/groups/:groupId", authenticateUser, async (req: Request, res:
 // POST /api/groups/:groupId/access-requests
 groupsRouter.post("/groups/:groupId/access-requests", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const groupId = req.params.groupId;
+    const groupId = req.params.groupId as string;
     const requesterId = req.user!._id;
 
     const group = await Group.findById(groupId);
@@ -226,7 +226,7 @@ groupsRouter.patch("/group-access-requests/:requestId", authenticateUser, async 
 // POST /api/groups/:groupId/posts
 groupsRouter.post("/groups/:groupId/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const groupId = req.params.groupId;
+    const groupId = req.params.groupId as string;
     const { text, media = [], topicLabels = [] } = req.body;
 
     if (!text || text.trim().length === 0) {
@@ -246,7 +246,11 @@ groupsRouter.post("/groups/:groupId/posts", authenticateUser, async (req: Reques
       return next(new AppError("You must be an active member to post to this group", 403));
     }
 
-    if (!isInstAdmin && group.postingPolicy === "moderators_only" && !["moderator", "supervisor", "admin"].includes(membership?.role || "")) {
+    if (
+      !isInstAdmin &&
+      group.postingPolicy === "moderators_only" &&
+      !(await canModerateGroup(req.user!._id, groupId))
+    ) {
       return next(new AppError("Only group moderators can post to this group", 403));
     }
 
@@ -272,7 +276,7 @@ groupsRouter.post("/groups/:groupId/posts", authenticateUser, async (req: Reques
 // GET /api/groups/:groupId/posts
 groupsRouter.get("/groups/:groupId/posts", authenticateUser, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const groupId = req.params.groupId;
+    const groupId = req.params.groupId as string;
     const group = await Group.findById(groupId);
     if (!group) return next(new AppError("Group not found", 404));
 

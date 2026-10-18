@@ -45,6 +45,29 @@ export interface IInstitution {
   themeColors?: { primary: string; secondary: string };
 }
 
+// --- Communities ---
+export interface ICommunity {
+  _id: string;
+  institutionId: string;
+  name: string;
+  slug: string;
+  createdBy: string;
+  createdAt: Date;
+}
+
+const CommunitySchema = new Schema<ICommunity>(
+  {
+    _id: { type: String, required: true },
+    institutionId: { type: String, required: true, index: true },
+    name: { type: String, required: true },
+    slug: { type: String, required: true },
+    createdBy: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+CommunitySchema.index({ institutionId: 1, slug: 1 }, { unique: true });
+
 const InstitutionSchema = new Schema<IInstitution>(
   {
     _id: { type: String, required: true },
@@ -680,6 +703,7 @@ const AuditEventSchema = new Schema<IAuditEvent>(
 // Export Mongoose Models
 export const User = mongoose.model<IUser>("User", UserSchema);
 export const Institution = mongoose.model<IInstitution>("Institution", InstitutionSchema);
+export const Community = mongoose.model<ICommunity>("Community", CommunitySchema);
 export const Affiliation = mongoose.model<IAffiliation>("Affiliation", AffiliationSchema);
 export const EmploymentClaim = mongoose.model<IEmploymentClaim>("EmploymentClaim", EmploymentClaimSchema);
 export const Group = mongoose.model<IGroup>("Group", GroupSchema);

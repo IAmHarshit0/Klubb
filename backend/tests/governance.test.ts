@@ -12,23 +12,78 @@ import {
 } from "../src/shared/models.js";
 
 describe("Institutional Governance, Announcements & Organisation Verification", () => {
-  it("Admin verifies an affiliation and creates an audit event", async () => {
+  it("keeps role definition and assignment actions Super Admin-only and institution-scoped", async () => {
+    const deniedDefinition = await request(app)
+      .post("/api/institutions/inst-apex-001/roles")
+      .set("X-User-Id", "usr-student-001")
+      .send({ name: "Unauthorized role", permissions: ["create_community"] });
+    expect(deniedDefinition.status).toBe(403);
+
+    const roleResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/roles")
+      .set("X-User-Id", "usr-admin-001")
+      .send({ name: "Community Officer", permissions: ["create_community"] });
+    expect(roleResponse.status).toBe(201);
+
+    const roleDefinitionId = roleResponse.body.roleDefinition._id;
+    const assignResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/role-assignments")
+      .set("X-User-Id", "usr-admin-001")
+      .send({ userId: "usr-student-001", roleDefinitionId });
+    expect(assignResponse.status).toBe(201);
+
+    const duplicateAssignment = await request(app)
+      .post("/api/institutions/inst-apex-001/role-assignments")
+      .set("X-User-Id", "usr-admin-001")
+      .send({ userId: "usr-student-001", roleDefinitionId });
+    expect(duplicateAssignment.status).toBe(409);
+
+    const userRoles = await request(app)
+      .get("/api/me")
+      .set("X-User-Id", "usr-student-001");
+    expect(userRoles.body.user.institutionRoles).toContainEqual(
+      expect.objectContaining({
+        institutionId: "inst-apex-001",
+        name: "Community Officer",
+        permissions: ["create_community"],
+      })
+    );
+  });
+
+  it("Only assigned verification officers can verify an affiliation and the current user receives role permissions", async () => {
     // Unverify Alex first
     await Affiliation.findByIdAndUpdate("aff-alex-001", { verificationStatus: "unverified" });
 
+    const deniedResponse = await request(app)
+      .post("/api/institutions/inst-apex-001/affiliations/aff-alex-001/verification")
+      .set("X-User-Id", "usr-student-002")
+      .send({ status: "institution-verified" });
+    expect(deniedResponse.status).toBe(403);
+
     const res = await request(app)
       .post("/api/institutions/inst-apex-001/affiliations/aff-alex-001/verification")
-      .set("X-User-Id", "usr-faculty-001")
+      .set("X-User-Id", "usr-officer-001")
       .send({ status: "institution-verified" });
 
     expect(res.status).toBe(200);
     expect(res.body.affiliation.verificationStatus).toBe("institution-verified");
+
+    const meResponse = await request(app)
+      .get("/api/me")
+      .set("X-User-Id", "usr-officer-001");
+    expect(meResponse.body.user.institutionRoles).toContainEqual(
+      expect.objectContaining({
+        institutionId: "inst-apex-001",
+        name: "Verification & Placement Officer",
+        permissions: expect.arrayContaining(["verify_affiliation", "create_community"]),
+      })
+    );
   });
 
   it("Institution publishes an announcement and recipient retrieves it", async () => {
     const postRes = await request(app)
       .post("/api/institutions/inst-apex-001/announcements")
-      .set("X-User-Id", "usr-faculty-001")
+      .set("X-User-Id", "usr-officer-001")
       .send({
         title: "Campus Commencement 2026",
         body: "Commencement ceremony details have been published.",
@@ -66,10 +121,17 @@ describe("Institutional Governance, Announcements & Organisation Verification", 
     expect(repRes.status).toBe(201);
     expect(repRes.body.representative.verificationStatus).toBe("pending");
 
-    // Platform verifier verifies organisation
+    // An ordinary student cannot verify an organisation.
+    const deniedVerification = await request(app)
+      .patch(`/api/organisations/${orgId}/verification`)
+      .set("X-User-Id", "usr-student-001")
+      .send({ verificationStatus: "verified" });
+    expect(deniedVerification.status).toBe(403);
+
+    // Assigned verification officer verifies the organisation.
     const patchRes = await request(app)
       .patch(`/api/organisations/${orgId}/verification`)
-      .set("X-User-Id", "usr-faculty-001")
+      .set("X-User-Id", "usr-officer-001")
       .send({ verificationStatus: "verified" });
 
     expect(patchRes.status).toBe(200);

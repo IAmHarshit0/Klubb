@@ -37,69 +37,66 @@ export async function hasVerifiedAlumniAffiliation(userId: string): Promise<bool
 }
 
 export async function canConfigureAvailability(userId: string): Promise<boolean> {
-  const affiliations = await Affiliation.find({ userId, status: "active" });
-
-  // If user has any non-student affiliation (e.g. Alumnus, Faculty, Admin), they have availability
-  const hasNonStudentRole = affiliations.some((a) => a.role !== "Student");
-  if (hasNonStudentRole) return true;
-
-  // Check if user is an organisation representative
-  const { OrganisationRepresentative } = await import("./models.js");
-  const rep = await OrganisationRepresentative.findOne({ userId });
-  if (rep) return true;
-
-  // If user has NO affiliations at all, check if they have employment claims (e.g. company rep)
-  if (affiliations.length === 0) {
-    const { EmploymentClaim } = await import("./models.js");
-    const claim = await EmploymentClaim.findOne({ userId });
-    if (claim) return true;
-  }
-
-  // Pure student: user has affiliations and ALL of them are role === "Student"
-  return false;
+  return hasVerifiedAlumniAffiliation(userId);
 }
 
 export async function isInstitutionAdmin(userId: string, institutionId?: string): Promise<boolean> {
-  if (institutionId) {
-    const adminAff = await Affiliation.findOne({
+  const query: Record<string, string> = {
+    userId,
+    role: "Admin",
+    status: "active",
+    verificationStatus: "institution-verified",
+  };
+  if (institutionId) query.institutionId = institutionId;
+  return Boolean(await Affiliation.exists(query));
+}
+
+export async function isInstitutionSuperAdmin(
+  userId: string,
+  institutionId: string
+): Promise<boolean> {
+  return Boolean(
+    await Affiliation.exists({
       userId,
       institutionId,
       role: "Admin",
       status: "active",
-    });
-    if (adminAff) return true;
+      verificationStatus: "institution-verified",
+    })
+  );
+}
 
-    // Check custom role assignments
-    const { RoleAssignment, RoleDefinition } = await import("./models.js");
-    const assignments = await RoleAssignment.find({
-      userId,
-      status: "active",
-      scopeType: "institution",
-      scopeId: institutionId,
-    });
-    if (assignments.length > 0) {
-      const roleDefIds = assignments.map((a) => a.roleDefinitionId);
-      const roles = await RoleDefinition.find({ _id: { $in: roleDefIds } });
-      if (
-        roles.some(
-          (r) =>
-            r.permissions.includes("*") ||
-            r.permissions.includes("admin") ||
-            r.permissions.includes("manage_groups")
-        )
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  const anyAdmin = await Affiliation.findOne({
+export async function hasDelegatedInstitutionPermission(
+  userId: string,
+  institutionId: string,
+  requiredPermission: string
+): Promise<boolean> {
+  const isVerifiedMember = await Affiliation.exists({
     userId,
-    role: "Admin",
+    institutionId,
     status: "active",
+    verificationStatus: "institution-verified",
   });
-  return !!anyAdmin;
+  if (!isVerifiedMember) return false;
+
+  const { RoleAssignment, RoleDefinition } = await import("./models.js");
+  const assignments = await RoleAssignment.find({
+    userId,
+    status: "active",
+    scopeType: "institution",
+    scopeId: institutionId,
+  });
+  if (assignments.length === 0) return false;
+
+  const roles = await RoleDefinition.find({
+    _id: { $in: assignments.map((assignment) => assignment.roleDefinitionId) },
+    institutionId,
+    scopeType: "institution",
+    scopeId: institutionId,
+  });
+  return roles.some(
+    (role) => role.permissions.includes(requiredPermission)
+  );
 }
 
 export async function canViewPost(viewer: IUser | null, post: IPost): Promise<boolean> {
@@ -216,8 +213,11 @@ export function canAccessConversation(userId: string, conversation: any): boolea
 
 export async function canModerateGroup(userId: string, groupId: string): Promise<boolean> {
   const group = await Group.findById(groupId);
-  if (group && (await isInstitutionAdmin(userId, group.institutionId))) {
-    return true;
+  if (group) {
+    if (await isInstitutionAdmin(userId, group.institutionId)) return true;
+    if (await hasInstitutionPermission(userId, group.institutionId, "moderate_student_groups")) {
+      return true;
+    }
   }
   const mem = await Membership.findOne({
     userId,
@@ -239,10 +239,19 @@ export async function hasInstitutionPermission(
     institutionId,
     role: "Admin",
     status: "active",
+    verificationStatus: "institution-verified",
   });
   if (adminAff) return true;
 
   // 2. Check role assignments and definitions
+  const isVerifiedMember = await Affiliation.exists({
+    userId,
+    institutionId,
+    status: "active",
+    verificationStatus: "institution-verified",
+  });
+  if (!isVerifiedMember) return false;
+
   const { RoleAssignment, RoleDefinition } = await import("./models.js");
   const assignments = await RoleAssignment.find({
     userId,
@@ -256,7 +265,10 @@ export async function hasInstitutionPermission(
   const roleDefIds = assignments.map((a) => a.roleDefinitionId);
   const roles = await RoleDefinition.find({
     _id: { $in: roleDefIds },
+    institutionId,
+    scopeType: "institution",
+    scopeId: institutionId,
   });
 
-  return roles.some((r) => r.permissions.includes(requiredPermission) || r.permissions.includes("*"));
+  return roles.some((r) => r.permissions.includes(requiredPermission));
 }

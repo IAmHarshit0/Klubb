@@ -5,6 +5,7 @@ import {
   getInstitutions,
   getInstitutionTree,
   getMyAnnouncements,
+  createInstitutionCommunity,
   createInstitutionGroup,
   getInstitutionRoles,
   getInstitutionRoleAssignments,
@@ -38,7 +39,7 @@ import {
   KeyRound,
   CheckCircle2,
 } from 'lucide-react';
-import type { Group } from '../types/api';
+import type { Community, Group } from '../types/api';
 
 export function InstitutionsPage() {
   const { userId, currentUser } = useAuth();
@@ -48,6 +49,10 @@ export function InstitutionsPage() {
 
   const [activeTab, setActiveTab] = useState<'communities' | 'announcements' | 'governance'>('communities');
   const [selectedInstId, setSelectedInstId] = useState<string>('inst-apex-001');
+
+  const [createCommunityOpen, setCreateCommunityOpen] = useState(false);
+  const [communityName, setCommunityName] = useState('');
+  const [communitySuffix, setCommunitySuffix] = useState('');
 
   // Create group modal state
   const [createOpen, setCreateOpen] = useState(false);
@@ -79,6 +84,19 @@ export function InstitutionsPage() {
 
   const institutions = instData?.institutions || [];
   const activeInstitution = institutions.find((i) => i._id === selectedInstId) || institutions[0];
+  const activeInstitutionId = activeInstitution?._id || selectedInstId;
+  const isSuperAdmin = Boolean(currentUser?.affiliations?.some(
+    (a) =>
+      a.institutionId === activeInstitutionId &&
+      a.role === 'Admin' &&
+      a.verificationStatus === 'institution-verified'
+  ));
+  const currentInstitutionRoles = currentUser?.institutionRoles?.filter(
+    (role) => role.institutionId === activeInstitutionId
+  ) || [];
+  const hasCommunityCreationRole = currentInstitutionRoles.some(
+    (role) => role.permissions.includes('create_community')
+  );
 
   // 2. Fetch hierarchy tree for active institution
   const { data: treeData, isLoading: loadingTree } = useQuery({
@@ -94,23 +112,23 @@ export function InstitutionsPage() {
   });
 
   // 4. Fetch Roles & Role Assignments for the institution
-  const { data: rolesData, isLoading: loadingRoles } = useQuery({
+  const { data: rolesData } = useQuery({
     queryKey: ['institution-roles', activeInstitution?._id || selectedInstId],
     queryFn: () => getInstitutionRoles(activeInstitution?._id || selectedInstId),
     enabled: !!(activeInstitution?._id || selectedInstId),
   });
 
-  const { data: assignmentsData, isLoading: loadingAssignments } = useQuery({
-    queryKey: ['institution-role-assignments', activeInstitution?._id || selectedInstId],
-    queryFn: () => getInstitutionRoleAssignments(activeInstitution?._id || selectedInstId),
-    enabled: !!(activeInstitution?._id || selectedInstId),
+  const { data: assignmentsData } = useQuery({
+    queryKey: ['institution-role-assignments', activeInstitutionId, userId],
+    queryFn: () => getInstitutionRoleAssignments(activeInstitutionId),
+    enabled: !!activeInstitutionId && isSuperAdmin,
   });
 
   // 5. Fetch Verified Members for assignment dropdown
   const { data: membersData } = useQuery({
-    queryKey: ['institution-verified-members', activeInstitution?._id || selectedInstId],
-    queryFn: () => getVerifiedMembers(activeInstitution?._id || selectedInstId),
-    enabled: !!(activeInstitution?._id || selectedInstId),
+    queryKey: ['institution-verified-members', activeInstitutionId, userId],
+    queryFn: () => getVerifiedMembers(activeInstitutionId),
+    enabled: !!activeInstitutionId && isSuperAdmin,
   });
 
   const announcements = annData?.announcements || [];
@@ -119,10 +137,18 @@ export function InstitutionsPage() {
   const roleAssignments = assignmentsData?.roleAssignments || [];
   const verifiedMembers = membersData?.members || [];
 
-  // Superadmin check
-  const isSuperAdmin = currentUser?.affiliations?.some(
-    (a) => a.institutionId === (activeInstitution?._id || selectedInstId) && a.role === 'Admin'
-  );
+  const createCommunityMutation = useMutation({
+    mutationFn: (data: { name: string; suffix: string }) =>
+      createInstitutionCommunity(activeInstitutionId, data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['institution-tree', activeInstitutionId] });
+      toast(`Community "${data.community.name}" created successfully!`, 'success');
+      setCreateCommunityOpen(false);
+      setCommunityName('');
+      setCommunitySuffix('');
+    },
+    onError: (e: any) => toast(e.message, 'error'),
+  });
 
   // Create group mutation
   const createGroupMutation = useMutation({
@@ -177,6 +203,17 @@ export function InstitutionsPage() {
       name: groupName.trim(),
       groupType,
       visibility,
+    });
+  };
+
+  const handleCreateCommunity = () => {
+    if (!communityName.trim() || !communitySuffix.trim()) {
+      toast('Enter a community name and unique suffix', 'error');
+      return;
+    }
+    createCommunityMutation.mutate({
+      name: communityName.trim(),
+      suffix: communitySuffix.trim().toLowerCase(),
     });
   };
 
@@ -239,6 +276,25 @@ export function InstitutionsPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {hasCommunityCreationRole && (
+              <Button
+                variant="secondary"
+                onClick={() => setCreateCommunityOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus size={15} />
+                Create Community
+              </Button>
+            )}
+            {isSuperAdmin && (
+              <Button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-2"
+              >
+                <Plus size={15} />
+                Create Group
+              </Button>
+            )}
             {isSuperAdmin && (
               <Button
                 variant="secondary"
@@ -249,10 +305,6 @@ export function InstitutionsPage() {
                 Define Role
               </Button>
             )}
-            <Button onClick={() => setCreateOpen(true)} className="flex items-center gap-2">
-              <Plus size={15} />
-              Create Community
-            </Button>
           </div>
         </div>
       </div>
@@ -305,6 +357,27 @@ export function InstitutionsPage() {
       {/* Tab 1: Communities Tree */}
       {activeTab === 'communities' && tree && (
         <div className="space-y-8">
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Globe size={16} className="text-mercury-black" />
+              <h2 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500">
+                Communities ({tree.communities.length})
+              </h2>
+            </div>
+            {tree.communities.length ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {tree.communities.map((community) => (
+                  <CommunityCard key={community._id} community={community} />
+                ))}
+              </div>
+            ) : (
+              <div className="mercury-card p-8 text-center text-mercury-gray-400">
+                <p className="text-sm font-semibold text-mercury-black">No communities yet</p>
+                <p className="text-xs mt-1">Institution verification officers can create communities.</p>
+              </div>
+            )}
+          </section>
+
           {/* Departments */}
           {tree.departments.length > 0 && (
             <div>
@@ -449,79 +522,109 @@ export function InstitutionsPage() {
             )}
           </div>
 
-          {/* Active Delegated Role Assignments */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500 flex items-center gap-1.5">
-                <Users size={14} />
-                Current Role Holders ({roleAssignments.length})
+          {!isSuperAdmin && (
+            <section className="mercury-card p-5">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500 mb-3">
+                Your Active Roles
               </h3>
-            </div>
-
-            {roleAssignments.length === 0 ? (
-              <div className="mercury-card p-8 text-center text-mercury-gray-400">
-                <Award size={24} className="mx-auto mb-2 text-mercury-gray-300" />
-                <p className="text-sm font-semibold text-mercury-black">No roles assigned yet</p>
-                <p className="text-xs mt-1">Super administrators can assign defined roles to verified campus people.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {roleAssignments.map((assignment) => (
-                  <div key={assignment._id} className="mercury-card p-5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                          <Award size={11} />
-                          {assignment.roleName}
-                        </span>
-                        <span className="text-[10px] text-mercury-gray-400 font-mono">
-                          {new Date(assignment.createdAt).toLocaleDateString()}
-                        </span>
+              {currentInstitutionRoles.length === 0 ? (
+                <p className="text-xs text-mercury-gray-500">
+                  You do not have an assigned institutional role at this institution.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {currentInstitutionRoles.map((role) => (
+                    <div key={role.roleDefinitionId}>
+                      <p className="text-sm font-semibold text-mercury-black">{role.name}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {role.permissions.map((permission) => (
+                          <span
+                            key={permission}
+                            className="text-[10px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 font-mono"
+                          >
+                            {permission}
+                          </span>
+                        ))}
                       </div>
-
-                      <div className="flex items-center gap-3 mt-3">
-                        <div className="w-10 h-10 rounded-full bg-mercury-black text-white flex items-center justify-center font-bold text-sm">
-                          {assignment.userName.charAt(0)}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-mercury-black">{assignment.userName}</h4>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-mercury-gray-500 font-medium">
-                              {assignment.userRole || 'User'}
-                            </span>
-                            {assignment.verificationStatus === 'institution-verified' && (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
-                                <CheckCircle2 size={11} />
-                                Verified
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {assignment.permissions.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-mercury-gray-100">
-                          <p className="text-[10px] uppercase font-bold text-mercury-gray-400 mb-1.5 tracking-wider">
-                            Granted Permissions
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {assignment.permissions.map((perm) => (
-                              <span
-                                key={perm}
-                                className="text-[10px] px-2 py-0.5 rounded-md bg-mercury-gray-100 text-mercury-gray-700 font-mono"
-                              >
-                                {perm}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Active Delegated Role Assignments */}
+          {isSuperAdmin && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-mercury-gray-500 flex items-center gap-1.5">
+                  <Users size={14} />
+                  Current Role Holders ({roleAssignments.length})
+                </h3>
               </div>
-            )}
-          </div>
+              {roleAssignments.length === 0 ? (
+                <div className="mercury-card p-8 text-center text-mercury-gray-400">
+                  <Award size={24} className="mx-auto mb-2 text-mercury-gray-300" />
+                  <p className="text-sm font-semibold text-mercury-black">No roles assigned yet</p>
+                  <p className="text-xs mt-1">Super administrators can assign defined roles to verified campus people.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {roleAssignments.map((assignment) => (
+                    <div key={assignment._id} className="mercury-card p-5 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                            <Award size={11} />
+                            {assignment.roleName}
+                          </span>
+                          <span className="text-[10px] text-mercury-gray-400 font-mono">
+                            {new Date(assignment.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-3">
+                          <div className="w-10 h-10 rounded-full bg-mercury-black text-white flex items-center justify-center font-bold text-sm">
+                            {assignment.userName.charAt(0)}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-mercury-black">{assignment.userName}</h4>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-xs text-mercury-gray-500 font-medium">
+                                {assignment.userRole || 'User'}
+                              </span>
+                              {assignment.verificationStatus === 'institution-verified' && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                                  <CheckCircle2 size={11} />
+                                  Verified
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {assignment.permissions.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-mercury-gray-100">
+                            <p className="text-[10px] uppercase font-bold text-mercury-gray-400 mb-1.5 tracking-wider">
+                              Granted Permissions
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {assignment.permissions.map((perm) => (
+                                <span
+                                  key={perm}
+                                  className="text-[10px] px-2 py-0.5 rounded-md bg-mercury-gray-100 text-mercury-gray-700 font-mono"
+                                >
+                                  {perm}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Defined Roles in the Institution */}
           <div>
@@ -558,11 +661,51 @@ export function InstitutionsPage() {
         </div>
       )}
 
-      {/* Create Group Modal */}
-      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Create New Community" size="md">
+      {/* Create Community Modal (Verification Officer) */}
+      <Modal
+        isOpen={createCommunityOpen}
+        onClose={() => setCreateCommunityOpen(false)}
+        title="Create Institution Community"
+        size="md"
+      >
         <div className="space-y-4">
           <Input
             label="Community Name"
+            placeholder="e.g. Alumni Network"
+            value={communityName}
+            onChange={(e) => setCommunityName(e.target.value)}
+          />
+          <Input
+            label="Unique Community Suffix"
+            placeholder="e.g. alumni-network"
+            value={communitySuffix}
+            onChange={(e) => setCommunitySuffix(e.target.value.toLowerCase())}
+          />
+          <p className="text-[11px] text-mercury-gray-400">
+            The suffix is unique within this institution and may contain lowercase letters,
+            numbers, and hyphens.
+          </p>
+          <div className="flex justify-end gap-3 pt-3">
+            <Button variant="secondary" size="sm" onClick={() => setCreateCommunityOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              loading={createCommunityMutation.isPending}
+              disabled={!communityName.trim() || !communitySuffix.trim()}
+              onClick={handleCreateCommunity}
+            >
+              Create Community
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Create Group Modal (Institution Super Admin) */}
+      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Create New Group" size="md">
+        <div className="space-y-4">
+          <Input
+            label="Group Name"
             placeholder="e.g. Apex AI & Robotics Club, Fintech Society"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
@@ -570,7 +713,7 @@ export function InstitutionsPage() {
 
           <div>
             <label className="block text-xs font-semibold text-mercury-gray-700 mb-1.5 uppercase tracking-wide">
-              Community Type
+              Group Type
             </label>
             <select
               value={groupType}
@@ -613,7 +756,7 @@ export function InstitutionsPage() {
               disabled={!groupName.trim()}
               onClick={handleCreateGroup}
             >
-              Create Community
+              Create Group
             </Button>
           </div>
         </div>
@@ -636,11 +779,10 @@ export function InstitutionsPage() {
             <div className="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl border border-mercury-gray-100 bg-mercury-gray-50">
               {[
                 { id: 'verify_affiliation', label: 'Verify Affiliations (Student & Faculty)' },
+                { id: 'create_community', label: 'Create Communities' },
                 { id: 'verify_employment', label: 'Verify Employer Claims' },
                 { id: 'publish_announcement', label: 'Publish Official Campus Announcements' },
                 { id: 'moderate_student_groups', label: 'Moderate Student Communities' },
-                { id: 'host_campus_events', label: 'Host & Authorize Campus Events' },
-                { id: 'view_audit_logs', label: 'View Governance Audit Logs' },
               ].map((p) => (
                 <label key={p.id} className="flex items-center gap-2.5 text-xs text-mercury-black cursor-pointer">
                   <input
@@ -770,5 +912,18 @@ function GroupCard({ group }: { group: Group }) {
         </Link>
       </div>
     </div>
+  );
+}
+
+function CommunityCard({ community }: { community: Community }) {
+  return (
+    <article className="mercury-card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-base font-bold text-mercury-black tracking-tight">{community.name}</h3>
+        <span className="text-[10px] px-2 py-1 rounded-md bg-mercury-gray-100 text-mercury-gray-600 font-mono">
+          {community.slug}
+        </span>
+      </div>
+    </article>
   );
 }

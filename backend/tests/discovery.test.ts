@@ -3,13 +3,12 @@ import request from "supertest";
 import { app } from "../src/app.js";
 
 describe("Professional Discovery & Verification", () => {
-  it("allows everyone to access discovery and restricts availability to non-students", async () => {
+  it("restricts discovery and availability to verified alumni", async () => {
     const studentResponse = await request(app)
       .get("/api/discover/people?company=Stripe&role=Alumnus")
       .set("X-User-Id", "usr-student-001");
 
-    expect(studentResponse.status).toBe(200);
-    expect(studentResponse.body.results.length).toBeGreaterThanOrEqual(1);
+    expect(studentResponse.status).toBe(403);
 
     const alumniResponse = await request(app)
       .get("/api/discover/people?company=Stripe&role=Alumnus")
@@ -32,7 +31,7 @@ describe("Professional Discovery & Verification", () => {
     const organisationsResponse = await request(app)
       .get("/api/discover/organisations")
       .set("X-User-Id", "usr-student-001");
-    expect(organisationsResponse.status).toBe(200);
+    expect(organisationsResponse.status).toBe(403);
 
     const broadSearch = await request(app)
       .get("/api/discover/people")
@@ -43,7 +42,7 @@ describe("Professional Discovery & Verification", () => {
     expect(studentResult).not.toHaveProperty("availability");
   });
 
-  it("loads delegated staff profiles with availability for non-students", async () => {
+  it("does not expose staff availability when the profile owner is not a verified alumnus", async () => {
     for (const [userId, name] of [
       ["usr-officer-001", "Sarah Jenkins"],
       ["usr-officer-northstar-001", "Noah Williams"],
@@ -55,13 +54,13 @@ describe("Professional Discovery & Verification", () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(userId);
       expect(response.body.name).toBe(name);
-      expect(response.body).toHaveProperty("availability");
+      expect(response.body).not.toHaveProperty("availability");
 
       const alumniViewerResponse = await request(app)
         .get(`/api/users/${userId}`)
         .set("X-User-Id", "usr-alumnus-001");
       expect(alumniViewerResponse.status).toBe(200);
-      expect(alumniViewerResponse.body).toHaveProperty("availability");
+      expect(alumniViewerResponse.body).not.toHaveProperty("availability");
     }
   });
 
@@ -74,7 +73,7 @@ describe("Professional Discovery & Verification", () => {
     expect(resPriya.status).toBe(200);
     expect(resPriya.body.employmentClaims[0].status).toBe("employer-verified");
     expect(resPriya.body.affiliations[0].verificationStatus).toBe("institution-verified");
-    expect(resPriya.body).toHaveProperty("availability");
+    expect(resPriya.body).not.toHaveProperty("availability");
 
     // Marcus is self-reported
     const resMarcus = await request(app)

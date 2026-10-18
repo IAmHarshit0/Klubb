@@ -12,8 +12,16 @@ export interface User {
   profileVisibility: 'public' | 'campus' | 'restricted';
   affiliations?: Affiliation[];
   employmentClaims?: EmploymentClaim[];
+  institutionRoles?: InstitutionRole[];
   availability?: Availability;
   connectionPreferences?: ConnectionPreferences;
+}
+
+export interface InstitutionRole {
+  institutionId: string;
+  roleDefinitionId: string;
+  name: string;
+  permissions: string[];
 }
 
 export interface Affiliation {
@@ -75,6 +83,15 @@ export interface Group {
   groupType: 'programme' | 'batch' | 'department' | 'club' | 'general';
   visibility: 'public' | 'campus_only' | 'restricted';
   postingPolicy: 'all_members' | 'moderators_only';
+}
+
+export interface Community {
+  _id: string;
+  institutionId: string;
+  name: string;
+  slug: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface Membership {
