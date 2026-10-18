@@ -28,6 +28,7 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
     const mode = (req.query.mode as string) || "reranked";
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
     const cursor = req.query.cursor as string;
+    const q = (req.query.q as string)?.trim().toLowerCase();
 
     // 1. Fetch user follows and preferences
     const follows = await Follow.find({ followerId: viewer._id });
@@ -75,7 +76,27 @@ feedRouter.get("/feed", authenticateUser, async (req: Request, res: Response, ne
 
       if (hiddenPostIds.has(post._id)) continue;
       if (mutedAuthors.has(post.authorId)) continue;
+
+      // 1. Mute by topic labels: do not include if any label is muted
       if (post.topicLabels.some((tl) => mutedTopics.has(normalizeTopic(tl)))) continue;
+
+      // 2. Mute by body text: do not include if post text contains any muted word/phrase
+      const postTextLower = post.text.toLowerCase();
+      const containsMutedWord = Array.from(mutedTopics).some((muted) => {
+        if (!muted || muted.trim().length === 0) return false;
+        const escaped = muted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const regex = new RegExp(`(^|\\W)${escaped}(\\W|$)`, "i");
+        return regex.test(postTextLower);
+      });
+      if (containsMutedWord) continue;
+
+      // Optional keyword query filter
+      if (q) {
+        const matchesQ =
+          postTextLower.includes(q) ||
+          post.topicLabels.some((tl) => tl.toLowerCase().includes(q));
+        if (!matchesQ) continue;
+      }
 
       const isViewable = await canViewPost(viewer, post);
       if (!isViewable) continue;

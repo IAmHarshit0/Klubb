@@ -27,10 +27,21 @@ Instead of a static contact directory or an engagement-driven social clone, Camp
    - Self-serve **"Request Affiliation"** modal allowing students and alumni to apply for institutional verification.
    - Granular RBAC: Delegated roles defined and assigned by Super Admins (`verify_affiliation`, `create_community`, `publish_announcement`, etc.).
 
-4. **Personalized 7-Signal Discovery & Feed Engine:**
+4. **Personalized 7-Signal Discovery & 15-Topic Noun Affinity Engine:**
    - Pre-filtered candidate selection ensuring 100% authoritative audience gating (public vs campus-only vs restricted groups).
    - Multi-factor scoring formula:
      $$\text{Score} = 0.28 \cdot \text{Topic} + 0.20 \cdot \text{Behaviour} + 0.15 \cdot \text{Graph} + 0.12 \cdot \text{Freshness} + 0.10 \cdot \text{Quality} + 0.10 \cdot \text{Verified} + 0.05 \cdot \text{Popularity}$$
+   - **15-Topic Cardinality Cap:** Dynamic Campus Topic Map (`getUserTopicMap`) is strictly capped at the top 15 highest-affinity topics sorted by composite score (`0.6 × ShortTerm + 0.4 × LongTerm`), preventing topic graph bloat.
+   - **Strict Noun & Noun-Phrase Parsing:** `isValidTopicNoun` validates 1–3 word academic, professional, and tech concepts (`distributed systems`, `machine learning`, `c++`, `node.js`, `.net`, `robotics`). Strictly eliminates bogus filler words (`stuff`, `really`, `today`, `awesome`, `things`, `cool`, `update`, `hello`, `doing`, `please`, `good`, `bad`), sentences, and pure numbers.
+   - **Post Muting & Negative Word Exclusion:** Pre-ranking filter inspects both declared `topicLabels` and post body `text` (whole-word regex). Posts matching any muted word or negative term are strictly **excluded from feed results** (never included, not merely downranked). Muting takes absolute priority over positive interest scores.
+   - **Positive Content Ranking:** Non-muted posts matching declared interests, verified authors, high quality, and lexical profile terms receive positive boosts and are ranked at the top of the feed.
+   - **Needs-Based Alumni Network Ranking (`computeAlumniNeedsScore`):**
+     - Ranks alumni based on student needs when applying for **Job Referrals**, **Mentorship**, or **Career Q&A**.
+     - Heavily prioritizes alumni with active referral readiness (`availableForReferrals: true`, `pauseIncomingRequests: false`) and employer-verified credentials at target companies (+45 points).
+     - Institutional alma mater synergy (+15 points), department alignment (+10 points), and skill overlap (+15 points) elevate top-match mentors and referrers to #1.
+     - Alumni with paused incoming requests or disabled referrals are ranked at the bottom.
+     - Dual discovery access: `GET /api/discover/alumni` (students & members) and `GET /api/discover/people` (alumni).
+   - **End-to-End Ingestion Gates:** `PATCH /api/me/interests` validates all entries and returns 400 on filler words (capped at 15 interests); `POST /api/posts` cleans topic labels; signal recording verifies noun validity before accumulating weights.
    - Alias taxonomy normalization (`k8s` $\to$ `kubernetes`, `ml` $\to$ `machine learning`, `postgres` $\to$ `postgresql`).
    - Time-decayed campus topic map with half-life decay on interaction signals and mution controls.
 
@@ -95,26 +106,26 @@ Visit **`http://localhost:5173`** to view the **Landing Page** and explore the p
 ---
 
 ## 🧪 Comprehensive Verification & Test Suite
-
-All 9 test suites and 40/40 tests pass with 100% success rate:
-
+  
+All 9 test suites and 56/56 tests pass with 100% success rate:
+  
 ```bash
 cd backend
 npm test
 ```
-
+  
 ### Test Suite Summary:
 - `tests/verification.test.ts` (9 tests): Organization registration queue, platform verifier review, short code assignment, founding super admin appointment, student/alumni affiliation requests, verification officer approvals, institutional metrics, and notification dispatch.
-- `tests/feed.test.ts` (2 tests): Pre-filtering candidate pool, audience restrictions, and 7-signal personalized feed scoring.
-- `tests/topic-interests.test.ts` (7 tests): Alias taxonomy normalization, declared interests, time-decayed topic map, signal decay, and mution.
+- `tests/feed.test.ts` (10 tests): Pre-filtering candidate pool, audience restrictions, 7-signal personalized feed scoring, post muting by topic labels, post muting by body text (whole-word matching), multiple muted words, absolute mute priority over positive score, positive content top-ranking, and immediate unmuting restoration.
+- `tests/topic-interests.test.ts` (13 tests): 15-topic cardinality cap, `isValidTopicNoun` validation (single/multi-word nouns, tech symbols `.net`/`c++`, filler word rejection, pure digit/sentence rejection), top-15 decay sorting, alias taxonomy normalization, declared interests, time-decayed topic map, signal decay, and mution.
+- `tests/discovery.test.ts` (7 tests): Verified-alumni discovery gating, employer-verified vs self-reported badge distinction, and **Needs-Based Alumni Network Ranking Engine** (student referral needs prioritization, employer-verification boost at target company, paused/disabled request downranking, mentorship intent ranking, and relevanceScore with rankingReasons).
 - `tests/connections.test.ts` (2 tests): Connection request workflow and private messaging gatekeeper (403 Forbidden until accepted).
 - `tests/governance.test.ts` (5 tests): Scoped institutional roles, delegated permissions, announcements, and organization verification transitions.
 - `tests/groups.test.ts` (5 tests): Super admin group creation, restricted group access request and supervisor approvals.
-- `tests/discovery.test.ts` (3 tests): Verified-alumni-only discovery gating, employer-verified vs self-reported badge distinction.
 - `tests/permissions.test.ts` (4 tests): Verification officer checks, super admin role checks, and support exception routing.
 - `tests/users.test.ts` (3 tests): Profile interest sanitization, availability gating, and privacy controls.
-
-**Result: 9 passed, 40 passed (100% passing).**
+  
+**Result: 9 passed, 56 passed (100% passing).**
 
 ---
 

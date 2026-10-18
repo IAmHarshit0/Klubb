@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { discoverPeople } from '../api/discovery';
+import { discoverPeople, discoverAlumni } from '../api/discovery';
 import { sendConnectionRequest, getConnections } from '../api/connections';
 import type { PeopleSearchParams } from '../api/discovery';
 import { PersonCard } from '../components/discovery/PersonCard';
@@ -31,6 +31,7 @@ export function DiscoveryPage() {
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [intent, setIntent] = useState<'all' | 'referral' | 'mentorship' | 'questions'>('referral');
   const [showFilters, setShowFilters] = useState(false);
   const [filterInputs, setFilterInputs] = useState<Record<string, string>>({});
 
@@ -48,13 +49,12 @@ export function DiscoveryPage() {
     setSubmittedQuery(query.trim());
   };
 
-  const searchParams: PeopleSearchParams = { q: submittedQuery, ...filters };
-  const hasSearch = Object.values(searchParams).some(Boolean);
+  const searchParams: PeopleSearchParams = { q: submittedQuery, ...filters, intent };
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['discover', 'people', userId, searchParams],
-    queryFn: () => discoverPeople(searchParams),
-    enabled: isVerifiedAlumnus && !authLoading && hasSearch,
+    queryKey: ['discover', 'people', userId, searchParams, isVerifiedAlumnus],
+    queryFn: () => (isVerifiedAlumnus ? discoverPeople(searchParams) : discoverAlumni(searchParams)),
+    enabled: !authLoading,
   });
 
   const { data: connectionsData } = useQuery({
@@ -191,6 +191,32 @@ export function DiscoveryPage() {
           )}
         </button>
       </form>
+
+      {/* Intent Needs Selection */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+        <span className="text-xs font-semibold text-mercury-gray-400 mr-1 flex items-center gap-1 flex-shrink-0">
+          Rank by needs:
+        </span>
+        {[
+          { key: 'referral', label: '🎯 Job Referrals' },
+          { key: 'mentorship', label: '🌱 Mentorship' },
+          { key: 'questions', label: '💬 Career Q&A' },
+          { key: 'all', label: 'All Alumni' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setIntent(tab.key as any)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+              intent === tab.key
+                ? 'bg-mercury-black text-white shadow-sm'
+                : 'bg-mercury-gray-100 text-mercury-gray-600 hover:bg-mercury-gray-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Active filter chips */}
       {activeFilterChips.length > 0 && (

@@ -4,7 +4,7 @@ import { authenticateUser } from "../auth/middleware.js";
 import { Post, Comment, PostInteraction, Affiliation } from "../../shared/models.js";
 import { canViewPost, canPostToAudience, isInstitutionAdmin } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
-import { recordTopicSignal } from "../../shared/topic-interests.js";
+import { recordTopicSignal, normalizeTopic, isValidTopicNoun } from "../../shared/topic-interests.js";
 
 export const postsRouter = Router();
 
@@ -118,8 +118,10 @@ postsRouter.post("/posts", authenticateUser, async (req: Request, res: Response,
       return next(new AppError("Topic labels must be an array of strings", 400));
     }
     const normalizedTopicLabels = [...new Set(
-      topicLabels.map((label: string) => label.trim().slice(0, 80)).filter(Boolean)
-    )];
+      topicLabels
+        .map((label: string) => label.trim().slice(0, 35))
+        .filter((label: string) => label.length > 0 && isValidTopicNoun(normalizeTopic(label)))
+    )].slice(0, 5);
 
     let targetInstId = institutionId;
     if (audienceType === "campus" && !targetInstId) {

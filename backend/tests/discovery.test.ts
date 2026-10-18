@@ -96,3 +96,64 @@ describe("Professional Discovery & Verification", () => {
     expect(studentProfileForAlumni.body).not.toHaveProperty("availability");
   });
 });
+
+describe("Alumni Network Needs-Based Ranking Engine", () => {
+  it("ranks alumni based on student referral needs (availableForReferrals & employer-verified at target company Priya Sharma ranks #1)", async () => {
+    // Student Alex discovers alumni at Stripe for referrals
+    const res = await request(app)
+      .get("/api/discover/alumni?intent=referral&company=Stripe")
+      .set("X-User-Id", "usr-student-001");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.length).toBeGreaterThanOrEqual(1);
+
+    // Priya Sharma (verified at Stripe, open for referrals, Apex alumna) must be ranked #1
+    const topAlum = res.body.results[0];
+    expect(topAlum.name).toBe("Priya Sharma");
+    expect(topAlum.relevanceScore).toBeGreaterThanOrEqual(80);
+    expect(topAlum.rankingReasons).toContain("Available for job referrals");
+    expect(topAlum.rankingReasons).toContain("Employer-verified professional");
+    expect(topAlum.rankingReasons.some((r: string) => r.includes("Stripe"))).toBe(true);
+  });
+
+  it("alumni with paused requests or disabled referrals are ranked lower than active referral-ready alumni", async () => {
+    const res = await request(app)
+      .get("/api/discover/alumni?intent=referral")
+      .set("X-User-Id", "usr-student-001");
+
+    expect(res.status).toBe(200);
+    const results = res.body.results;
+    expect(results.length).toBeGreaterThan(1);
+
+    // Find Marcus (usr-alumnus-002, who has referrals disabled in seed) and Priya (availableForReferrals: true)
+    const priya = results.find((r: any) => r.id === "usr-alumnus-001");
+    const marcus = results.find((r: any) => r.id === "usr-alumnus-002");
+
+    if (priya && marcus) {
+      expect(priya.relevanceScore).toBeGreaterThan(marcus.relevanceScore);
+      expect(results.indexOf(priya)).toBeLessThan(results.indexOf(marcus));
+    }
+  });
+
+  it("intent=mentorship prioritizes alumni who have mentorship enabled", async () => {
+    const res = await request(app)
+      .get("/api/discover/alumni?intent=mentorship")
+      .set("X-User-Id", "usr-student-001");
+
+    expect(res.status).toBe(200);
+    const top = res.body.results[0];
+    expect(top.availability.mentorship).toBe(true);
+    expect(top.rankingReasons).toContain("Available for mentorship");
+  });
+
+  it("discover/people also ranks results by needs with relevanceScore and rankingReasons for alumni viewers", async () => {
+    const res = await request(app)
+      .get("/api/discover/people?company=Stripe&intent=referral")
+      .set("X-User-Id", "usr-alumnus-002");
+
+    expect(res.status).toBe(200);
+    expect(res.body.results.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.results[0]).toHaveProperty("relevanceScore");
+    expect(res.body.results[0]).toHaveProperty("rankingReasons");
+  });
+});

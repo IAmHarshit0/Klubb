@@ -388,18 +388,18 @@ export function InstitutionsPage() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="spatial-label">ORGANIZING LAYER</span>
               <span className="text-mercury-gray-300">·</span>
               <span className="text-xs text-mercury-gray-500 font-medium">Campus Network v3.0</span>
               {isMyAffiliationVerified ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold border border-emerald-200 whitespace-nowrap flex-shrink-0">
                   <CheckCircle2 size={12} /> Verified {myAffiliation?.role}
                 </span>
               ) : (
                 <button
                   onClick={() => setRequestAffiliationOpen(true)}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors whitespace-nowrap flex-shrink-0"
                 >
                   <UserPlus size={12} /> Request Affiliation
                 </button>

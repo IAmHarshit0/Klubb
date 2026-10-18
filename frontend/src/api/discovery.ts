@@ -9,6 +9,7 @@ export interface PeopleSearchParams {
   institution?: string;
   programme?: string;
   batch?: string;
+  intent?: 'referral' | 'mentorship' | 'questions' | 'all';
 }
 
 export async function discoverPeople(
@@ -20,6 +21,20 @@ export async function discoverPeople(
     if (v && v.trim().length > 0) clean[k] = v.trim();
   }
   const response = await api.get<{ results: DiscoveryPerson[] }>('/discover/people', { params: clean });
+  return response.data;
+}
+
+export async function discoverAlumni(
+  params: PeopleSearchParams
+): Promise<{ results: DiscoveryPerson[]; intent?: string; total?: number }> {
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v && v.trim().length > 0) clean[k] = v.trim();
+  }
+  const response = await api.get<{ results: DiscoveryPerson[]; intent?: string; total?: number }>(
+    '/discover/alumni',
+    { params: clean }
+  );
   return response.data;
 }
 

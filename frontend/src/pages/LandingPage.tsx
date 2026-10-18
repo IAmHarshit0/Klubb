@@ -158,10 +158,10 @@ export function LandingPage() {
             </div>
             <div className="mt-6 pt-4 border-t border-mercury-gray-100 bg-emerald-50/50 -mx-6 -mb-6 p-6 rounded-b-2xl border-emerald-100">
               <div className="flex items-center gap-2 text-emerald-800 font-semibold text-xs uppercase tracking-wider mb-1">
-                <CheckCircle2 size={16} className="text-emerald-600" /> Our Solution: 7-Signal Personalized Feed
+                <CheckCircle2 size={16} className="text-emerald-600" /> Our Solution: 7-Signal Personalized Feed & 15-Topic Noun Engine
               </div>
               <p className="text-xs text-emerald-900 leading-relaxed">
-                Multi-stage feed with candidate pre-filtering (inaccessible posts filtered BEFORE ranking), time-decayed topic maps, topic normalization (Postgres → PostgreSQL, ML → Machine Learning), and transparent "Why am I seeing this?" explanations.
+                Multi-stage feed with candidate pre-filtering, our <strong>15-Topic Noun Affinity Engine</strong> (strictly eliminating conversational filler words, enforcing valid 1–3 word nouns, and capping at the top 15 highest-affinity topics), time-decayed interest vectors, canonical normalization (Postgres → PostgreSQL, ML → Machine Learning), and transparent "Why am I seeing this?" score breakdowns.
               </p>
             </div>
           </div>
@@ -315,6 +315,57 @@ export function LandingPage() {
                 <span className="text-xl font-extrabold text-rose-400">5%</span>
                 <p className="text-xs font-semibold text-neutral-200 mt-1">Popularity</p>
                 <p className="text-[10px] text-neutral-400">Bounded influence</p>
+              </div>
+            </div>
+
+            {/* 15-Topic Noun Affinity Engine Deep-Dive */}
+            <div className="mt-8 p-6 rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/40 border border-indigo-100 shadow-mercury-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-indigo-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-600 text-white rounded-xl">
+                    <Sparkles size={18} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-base text-mercury-black">
+                      15-Topic Noun Affinity Engine: Pure Intent, Zero Noise
+                    </h4>
+                    <p className="text-xs text-mercury-gray-500">
+                      Eliminates conversational pollution and strictly caps active topic state to maximum 15 high-value concepts
+                    </p>
+                  </div>
+                </div>
+                <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-indigo-100 text-indigo-800 text-xs font-semibold">
+                  Max 15 Cardinality Cap
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
+                <div className="p-4 rounded-xl bg-white border border-indigo-100/80 shadow-mercury-xs">
+                  <div className="flex items-center gap-2 mb-1.5 text-indigo-700 font-semibold text-xs">
+                    <CheckCircle2 size={15} /> 1–3 Word Noun Phrases Only
+                  </div>
+                  <p className="text-xs text-mercury-gray-600 leading-relaxed">
+                    Conversational slang and filler words (<em>"stuff", "really", "today", "awesome", "cool", "things"</em>), sentences, and pure numbers are strictly rejected. Only legitimate technical and academic nouns are ingested.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white border border-indigo-100/80 shadow-mercury-xs">
+                  <div className="flex items-center gap-2 mb-1.5 text-indigo-700 font-semibold text-xs">
+                    <CheckCircle2 size={15} /> Top 15 Ranked Cardinality
+                  </div>
+                  <p className="text-xs text-mercury-gray-600 leading-relaxed">
+                    Your dynamic Campus Topic Map retains only the top 15 topics with the highest composite decay-weighted affinity. Prevents unbounded graph bloat and keeps user intent crisp and distinct.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-white border border-indigo-100/80 shadow-mercury-xs">
+                  <div className="flex items-center gap-2 mb-1.5 text-indigo-700 font-semibold text-xs">
+                    <CheckCircle2 size={15} /> Dual-State Exponential Decay
+                  </div>
+                  <p className="text-xs text-mercury-gray-600 leading-relaxed">
+                    Combines short-term transient signals (60% weight, half-life 3–14 days) with declared long-term profile anchors (40% weight). Members can mute topics or reset inferred activity at any time.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

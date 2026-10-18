@@ -77,8 +77,8 @@ export function GroupPage() {
         />
 
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="spatial-label">{group.groupType} Group</span>
               <span className="text-mercury-gray-300">·</span>
               <span className="text-xs text-mercury-gray-400 capitalize flex items-center gap-1">
@@ -91,30 +91,34 @@ export function GroupPage() {
               {group.name}
             </h1>
 
-            <div className="flex items-center gap-4 text-xs text-mercury-gray-500">
-              <span className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-mercury-gray-500">
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
                 <Users size={13} />
                 {memberCount} active member{memberCount !== 1 ? 's' : ''}
               </span>
               <span>·</span>
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
                 <Shield size={13} />
                 Posting: {group.postingPolicy.replace('_', ' ')}
               </span>
             </div>
           </div>
 
-          <div>
+          <div className="flex-shrink-0">
             {isMember ? (
-              <span className={`px-4 py-2 text-xs font-bold rounded-xl border ${
-                (membership as any)?.isSuperAdmin
-                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                  : 'bg-green-50 text-green-700 border-green-200'
-              }`}>
-                {(membership as any)?.isSuperAdmin
-                  ? 'Institution Superadmin (Full Access)'
-                  : `Active Member (${membership.role})`}
-              </span>
+              (membership as any)?.isSuperAdmin ? (
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl border border-purple-200 bg-purple-50 text-purple-700 whitespace-nowrap shadow-sm">
+                  <Shield size={13} className="text-purple-600 flex-shrink-0" />
+                  <span>Superadmin Full Access</span>
+                </span>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-medium rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 whitespace-nowrap shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                  <span className="font-semibold">Active Member</span>
+                  <span className="text-emerald-300">·</span>
+                  <span className="capitalize font-semibold text-emerald-700">{membership.role}</span>
+                </div>
+              )
             ) : (
               <Button
                 onClick={() => accessMutation.mutate()}

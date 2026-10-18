@@ -33,6 +33,11 @@ export function PersonCard({ person, onConnect, connectionState = 'none' }: Pers
               >
                 {person.name}
               </Link>
+              {person.relevanceScore !== undefined && person.relevanceScore > 50 && (
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                  {person.relevanceScore}% Match
+                </span>
+              )}
             </div>
 
             {/* Current Professional Role */}
@@ -111,6 +116,20 @@ export function PersonCard({ person, onConnect, connectionState = 'none' }: Pers
                 Open to questions
               </span>
             )}
+          </div>
+        )}
+
+        {/* Ranking Reasons / Needs Matching Highlights */}
+        {person.rankingReasons && person.rankingReasons.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {person.rankingReasons.slice(0, 2).map((reason) => (
+              <span
+                key={reason}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/60 text-emerald-800 text-[10px] font-semibold"
+              >
+                ★ {reason}
+              </span>
+            ))}
           </div>
         )}
       </div>

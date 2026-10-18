@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { app } from "../src/app.js";
-import { Message, UserTopicInterest } from "../src/shared/models.js";
-import { recordTopicSignal } from "../src/shared/topic-interests.js";
+import { Message, UserTopicInterest, User } from "../src/shared/models.js";
+import {
+  recordTopicSignal,
+  isValidTopicNoun,
+  normalizeTopic,
+  MAX_TOPIC_MAP_ENTRIES,
+  BOGUS_FILLER_WORDS,
+} from "../src/shared/topic-interests.js";
 
 describe("Time-decayed topic map", () => {
   it("returns declared profile interests as long-term topics", async () => {
@@ -228,5 +234,149 @@ describe("Time-decayed topic map", () => {
       .set("X-User-Id", "usr-student-001")
       .send({ mutedTopicIds: [] });
     expect(unmute.status).toBe(200);
+  });
+});
+
+describe("Topic Noun Validation & 15-Topic Cardinality Cap", () => {
+  it("validates legitimate single-word and multi-word domain nouns", () => {
+    // Valid single nouns
+    expect(isValidTopicNoun("kubernetes")).toBe(true);
+    expect(isValidTopicNoun("databases")).toBe(true);
+    expect(isValidTopicNoun("fintech")).toBe(true);
+    expect(isValidTopicNoun("robotics")).toBe(true);
+    expect(isValidTopicNoun("python")).toBe(true);
+
+    // Valid 2 to 3 word technical noun phrases
+    expect(isValidTopicNoun("machine learning")).toBe(true);
+    expect(isValidTopicNoun("distributed systems")).toBe(true);
+    expect(isValidTopicNoun("quantum computing")).toBe(true);
+    expect(isValidTopicNoun("natural language processing")).toBe(true);
+    expect(isValidTopicNoun("cloud infrastructure")).toBe(true);
+
+    // Technical naming conventions with symbols (. - # +)
+    expect(isValidTopicNoun("c++")).toBe(true);
+    expect(isValidTopicNoun("c#")).toBe(true);
+    expect(isValidTopicNoun("node.js")).toBe(true);
+    expect(isValidTopicNoun(".net")).toBe(true);
+    expect(isValidTopicNoun("web3")).toBe(true);
+  });
+
+  it("strictly rejects bogus filler words, conversational slang, pronouns, and verbs", () => {
+    // Single bogus filler words
+    expect(isValidTopicNoun("stuff")).toBe(false);
+    expect(isValidTopicNoun("really")).toBe(false);
+    expect(isValidTopicNoun("today")).toBe(false);
+    expect(isValidTopicNoun("awesome")).toBe(false);
+    expect(isValidTopicNoun("things")).toBe(false);
+    expect(isValidTopicNoun("cool")).toBe(false);
+    expect(isValidTopicNoun("hello")).toBe(false);
+    expect(isValidTopicNoun("lol")).toBe(false);
+    expect(isValidTopicNoun("update")).toBe(false);
+    expect(isValidTopicNoun("doing")).toBe(false);
+    expect(isValidTopicNoun("please")).toBe(false);
+
+    // Compound phrases containing bogus words
+    expect(isValidTopicNoun("really cool ml")).toBe(false);
+    expect(isValidTopicNoun("awesome stuff")).toBe(false);
+    expect(isValidTopicNoun("today update")).toBe(false);
+    expect(isValidTopicNoun("good things")).toBe(false);
+  });
+
+  it("strictly rejects sentences, phrases > 3 words, pure digits, and punctuation noise", () => {
+    // Phrases with > 3 words
+    expect(isValidTopicNoun("this is a very long sentence about coding")).toBe(false);
+    expect(isValidTopicNoun("machine learning in the modern world today")).toBe(false);
+
+    // Pure numbers
+    expect(isValidTopicNoun("12345")).toBe(false);
+    expect(isValidTopicNoun("42")).toBe(false);
+
+    // Pure punctuation / symbols
+    expect(isValidTopicNoun("???")).toBe(false);
+    expect(isValidTopicNoun("---")).toBe(false);
+    expect(isValidTopicNoun("!@#$")).toBe(false);
+
+    // Under-length or empty
+    expect(isValidTopicNoun("a")).toBe(false);
+    expect(isValidTopicNoun("")).toBe(false);
+    expect(isValidTopicNoun("   ")).toBe(false);
+
+    // Over 35 characters
+    expect(isValidTopicNoun("supercalifragilisticexpialidociousengineering")).toBe(false);
+  });
+
+  it("enforces a strict maximum cap of 15 entries in getUserTopicMap sorted by highest score", async () => {
+    // Populate user with 20 distinct valid topics
+    const twentyTopics = [
+      "kubernetes", "databases", "fintech", "robotics", "python",
+      "machine learning", "distributed systems", "quantum computing", "natural language processing", "cloud infrastructure",
+      "bioengineering", "genetics", "bioinformatics", "data science", "cybersecurity",
+      "cryptography", "deep learning", "embedded systems", "computer vision", "microservices"
+    ];
+
+    // Seed UserTopicInterest with 20 topics with incrementing weights
+    const userId = "usr-student-003";
+    for (let i = 0; i < twentyTopics.length; i++) {
+      await UserTopicInterest.findOneAndUpdate(
+        { userId, topic: twentyTopics[i] },
+        {
+          $set: {
+            longTermWeight: 1,
+            shortTermWeight: (i + 1) * 0.05,
+            lastInteractedAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    }
+
+    const res = await request(app)
+      .get("/api/me/topic-map")
+      .set("X-User-Id", userId);
+
+    expect(res.status).toBe(200);
+    // Must be capped at exactly MAX_TOPIC_MAP_ENTRIES (15)
+    expect(res.body.topicMap.length).toBeLessThanOrEqual(MAX_TOPIC_MAP_ENTRIES);
+    expect(res.body.topicMap.length).toBe(15);
+
+    // Verify sort order: descending score
+    const scores = res.body.topicMap.map((t: any) => t.score);
+    for (let i = 0; i < scores.length - 1; i++) {
+      expect(scores[i]).toBeGreaterThanOrEqual(scores[i + 1]);
+    }
+  });
+
+  it("PATCH /api/me/interests rejects bogus filler words and allows valid nouns", async () => {
+    // 1. Sending bogus filler words is rejected with 400
+    const failRes = await request(app)
+      .patch("/api/me/interests")
+      .set("X-User-Id", "usr-student-001")
+      .send({ interests: ["AI", "awesome stuff"] });
+
+    expect(failRes.status).toBe(400);
+    expect(failRes.body.error.message).toContain("not a valid topic noun");
+
+    // 2. Sending valid nouns succeeds with 200
+    const successRes = await request(app)
+      .patch("/api/me/interests")
+      .set("X-User-Id", "usr-student-001")
+      .send({ interests: ["AI", "Fintech", "Distributed Systems"] });
+
+    expect(successRes.status).toBe(200);
+    expect(successRes.body.interests).toEqual(["AI", "Fintech", "Distributed Systems"]);
+  });
+
+  it("POST /api/posts ignores bogus filler topicLabels and only retains valid noun topics", async () => {
+    const postRes = await request(app)
+      .post("/api/posts")
+      .set("X-User-Id", "usr-student-001")
+      .send({
+        text: "Testing topic label sanitization in post creation.",
+        topicLabels: ["Distributed Systems", "really", "cool stuff", "Machine Learning"],
+      });
+
+    expect(postRes.status).toBe(201);
+    // Only the valid nouns remain
+    expect(postRes.body.post.topicLabels).toEqual(["Distributed Systems", "Machine Learning"]);
   });
 });

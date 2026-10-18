@@ -16,7 +16,7 @@ import {
   hasVerifiedAlumniAffiliation,
 } from "../../shared/permissions.js";
 import { AppError } from "../../shared/errors.js";
-import { getUserTopicMap, normalizeTopic } from "../../shared/topic-interests.js";
+import { getUserTopicMap, normalizeTopic, isValidTopicNoun } from "../../shared/topic-interests.js";
 
 export const usersRouter = Router();
 
@@ -109,7 +109,15 @@ usersRouter.patch("/me/profile", authenticateUser, async (req: Request, res: Res
     if (bio !== undefined && typeof bio === "string") updateData.bio = bio.trim();
     if (portfolioUrl !== undefined && typeof portfolioUrl === "string") updateData.portfolioUrl = portfolioUrl.trim();
     if (Array.isArray(skills)) updateData.skills = skills.map((s: string) => String(s).trim()).filter(Boolean);
-    if (Array.isArray(interests)) updateData.interests = interests.map((i: string) => String(i).trim()).filter(Boolean);
+    if (Array.isArray(interests)) {
+      updateData.interests = Array.from(
+        new Set(
+          interests
+            .map((i: string) => String(i).trim())
+            .filter((i: string) => i.length > 0 && isValidTopicNoun(normalizeTopic(i)))
+        )
+      ).slice(0, 15);
+    }
 
     const user = await User.findByIdAndUpdate(req.user!._id, { $set: updateData }, { new: true });
     if (!user) return next(new AppError("User not found", 404));
@@ -288,9 +296,23 @@ usersRouter.patch("/me/interests", authenticateUser, async (req: Request, res: R
       return next(new AppError("Interests must be an array of strings", 400));
     }
 
+    for (const raw of interests) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      if (!isValidTopicNoun(normalizeTopic(trimmed))) {
+        return next(
+          new AppError(
+            `"${trimmed}" is not a valid topic noun. Interests must be actual nouns or technical fields (1–3 words) and cannot be filler words.`,
+            400
+          )
+        );
+      }
+    }
+
     const normalizedInterests = Array.from(
       new Set(interests.map((interest: string) => interest.trim()).filter(Boolean))
-    );
+    ).slice(0, 15);
+
     const user = await User.findByIdAndUpdate(
       req.user!._id,
       { interests: normalizedInterests },

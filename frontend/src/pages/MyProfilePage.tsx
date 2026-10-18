@@ -75,6 +75,7 @@ export function MyProfilePage() {
   const user = data?.user;
   const [interests, setInterests] = useState<string[]>([]);
   const [interestDraft, setInterestDraft] = useState('');
+  const [interestError, setInterestError] = useState<string | null>(null);
 
   // Local state for toggles
   const [mentorship, setMentorship] = useState(false);
@@ -369,33 +370,77 @@ export function MyProfilePage() {
 
       <section className="mercury-card p-6 mb-8">
         <div className="mb-4">
-          <h2 className="text-base font-bold text-mercury-black">Your interests</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-mercury-black">Your Interests (Up to 15)</h2>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-mercury-gray-100 text-mercury-gray-700">
+              {interests.length} / 15
+            </span>
+          </div>
           <p className="text-xs text-mercury-gray-500 mt-1">
-            Add topics you care about to personalize your feed and help people discover you.
+            Add 1–3 word academic or professional nouns (e.g. Distributed Systems, Artificial Intelligence, Fintech). Filler words and conversational phrases are automatically filtered out.
           </p>
         </div>
         <form
-          className="flex gap-2"
+          className="flex flex-col gap-2"
           onSubmit={(event) => {
             event.preventDefault();
+            setInterestError(null);
             const interest = interestDraft.trim();
-            if (!interest || interests.some((saved) => saved.toLowerCase() === interest.toLowerCase())) {
+            if (!interest) return;
+
+            if (interests.length >= 15) {
+              setInterestError('Maximum limit of 15 interests reached.');
               return;
             }
+
+            if (interests.some((saved) => saved.toLowerCase() === interest.toLowerCase())) {
+              setInterestError('This interest is already in your list.');
+              return;
+            }
+
+            if (interest.length < 2 || interest.length > 35) {
+              setInterestError('Topic concepts must be between 2 and 35 characters.');
+              return;
+            }
+
+            const words = interest.toLowerCase().split(/\s+/).filter(Boolean);
+            if (words.length > 3) {
+              setInterestError('Please enter a concise noun concept (1 to 3 words maximum).');
+              return;
+            }
+
+            const bogusSet = new Set([
+              'stuff', 'really', 'today', 'awesome', 'things', 'cool', 'hello', 'lol', 'lmao',
+              'update', 'doing', 'please', 'thanks', 'thank', 'good', 'bad', 'nice', 'great',
+              'very', 'just', 'more', 'less', 'best', 'worst', 'hey', 'hi', 'yes', 'no'
+            ]);
+            if (words.some((w) => bogusSet.has(w))) {
+              setInterestError('Please enter a substantive topic noun or domain phrase, avoiding conversational filler words.');
+              return;
+            }
+
             setInterests((saved) => [...saved, interest]);
             setInterestDraft('');
           }}
         >
-          <input
-            value={interestDraft}
-            onChange={(event) => setInterestDraft(event.target.value)}
-            placeholder="e.g. AI, fintech, design"
-            aria-label="Add an interest"
-            className="mercury-input flex-1"
-          />
-          <Button type="submit" variant="secondary" disabled={!interestDraft.trim()}>
-            Add
-          </Button>
+          <div className="flex gap-2">
+            <input
+              value={interestDraft}
+              onChange={(event) => {
+                setInterestDraft(event.target.value);
+                if (interestError) setInterestError(null);
+              }}
+              placeholder="e.g. Machine Learning, Distributed Systems, Cloud Infrastructure"
+              aria-label="Add an interest"
+              className="mercury-input flex-1"
+            />
+            <Button type="submit" variant="secondary" disabled={!interestDraft.trim() || interests.length >= 15}>
+              Add
+            </Button>
+          </div>
+          {interestError && (
+            <p className="text-xs text-rose-600 font-medium mt-1">{interestError}</p>
+          )}
         </form>
         <div className="flex flex-wrap gap-2 mt-4">
           {interests.length > 0 ? interests.map((interest) => (
@@ -428,13 +473,21 @@ export function MyProfilePage() {
       <section className="mercury-card p-6 mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
           <div>
-            <h2 className="text-base font-bold text-mercury-black">Your Campus Topic Map</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-mercury-black">Your Campus Topic Map (Top 15 Ranked Nouns)</h2>
+              {topicMapData?.topicMap?.length ? (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  {topicMapData.topicMap.length} / 15 Max
+                </span>
+              ) : null}
+            </div>
             <p className="text-xs text-mercury-gray-500 mt-1">
-              Interest signals from follows, searches, saves, reactions, comments, and your published post topics decay over time.
+              Interest signals from follows, searches, saves, reactions, comments, and your published post topics decay exponentially over time.
+              Conversational filler words are strictly eliminated; only legitimate 1–3 word nouns are retained, capped at your top 15 highest-affinity concepts.
               Private messages are never used.
             </p>
             <p className="text-xs text-mercury-gray-400 mt-1">
-              Resetting clears inferred activity; your profile interests, skills, and topic follows remain.
+              Resetting clears inferred activity; your profile interests, skills, and explicit topic follows remain intact.
             </p>
           </div>
           <Button
@@ -459,16 +512,19 @@ export function MyProfilePage() {
           </p>
         ) : topicMapData?.topicMap.length ? (
           <div className="flex flex-wrap gap-2.5">
-            {topicMapData.topicMap.map(({ topic, score, shortTermWeight, lastActive, muted }) => (
+            {topicMapData.topicMap.map(({ topic, score, shortTermWeight, lastActive, muted }, index) => (
               <div
                 key={topic}
-                title={lastActive ? `Last active ${new Date(lastActive).toLocaleDateString()}` : 'From your profile'}
+                title={lastActive ? `Rank #${index + 1} · Last active ${new Date(lastActive).toLocaleDateString()}` : `Rank #${index + 1} · From your profile`}
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${
                   muted ? 'border-mercury-gray-200 bg-mercury-gray-50 opacity-70' : 'border-mercury-gray-200 bg-white'
                 }`}
               >
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-mercury-gray-100 text-mercury-gray-600">
+                  #{index + 1}
+                </span>
                 <span className="text-sm font-semibold text-mercury-black capitalize">{topic}</span>
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-mercury-gray-100 text-mercury-gray-600">
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-semibold">
                   {(score * 100).toFixed(0)}%
                 </span>
                 {shortTermWeight > 0.4 && (

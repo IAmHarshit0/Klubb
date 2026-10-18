@@ -192,6 +192,8 @@ export interface DiscoveryPerson {
   affiliations: Affiliation[];
   employmentClaims: EmploymentClaim[];
   availability?: Availability;
+  relevanceScore?: number;
+  rankingReasons?: string[];
 }
 
 export interface Organisation {

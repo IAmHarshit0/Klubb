@@ -37,24 +37,24 @@ const variantConfig: Record<BadgeVariant, { className: string; icon?: React.Reac
     icon: <Building2 size={11} className="text-neutral-600 flex-shrink-0" />,
   },
   campus: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
     icon: <Building2 size={10} className="text-neutral-500 flex-shrink-0" />,
   },
   group: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
     icon: <Users size={10} className="text-neutral-500 flex-shrink-0" />,
   },
   public: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100/70 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
   },
   neutral: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
   },
   default: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
   },
   secondary: {
-    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md',
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0',
   },
 };
 

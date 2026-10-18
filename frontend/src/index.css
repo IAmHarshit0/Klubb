@@ -143,19 +143,19 @@
 
   /* ── Mercury Badge ── */
   .badge-verified {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-800 text-[11px] font-medium rounded-md;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-800 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0;
   }
 
   .badge-self-reported {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50/60 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50/60 border border-neutral-200 text-neutral-500 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0;
   }
 
   .badge-pending {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 text-neutral-400 text-[11px] font-normal rounded-md border border-dashed border-neutral-200;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 text-neutral-400 text-[11px] font-normal rounded-md border border-dashed border-neutral-200 whitespace-nowrap flex-shrink-0;
   }
 
   .badge-institution {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-50 border border-neutral-200 text-neutral-700 text-[11px] font-medium rounded-md whitespace-nowrap flex-shrink-0;
   }
 
   /* ── Blob Decoration ── */

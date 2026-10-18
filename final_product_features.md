@@ -729,6 +729,46 @@ Initial weights must be configurable and evaluated against observed usefulness; 
 
 Offer user controls to inspect, correct, mute, reset, or disable inferred interests.
 
+### 11.2.1 15-Topic Noun Affinity Engine & Semantic Validation
+
+To prevent topic pollution, noise bloat, and engagement spam from distorting user profiles, the topic engine enforces strict semantic validation and a hard cardinality ceiling:
+
+1. **Maximum Cardinality Cap (15 Topics):**
+   - The user's active topic map output (`getUserTopicMap`) is strictly capped at the **top 15 topics** (`MAX_TOPIC_MAP_ENTRIES = 15`), sorted by composite decay score descending (`Score = 0.6 × ShortTerm + 0.4 × LongTerm`).
+   - Profile interests (`PATCH /api/me/interests`) are capped at a maximum of 15 explicit concepts.
+
+2. **Strict Noun & Noun-Phrase Parsing (`isValidTopicNoun`):**
+   - **Length Bounds:** 2 to 35 characters.
+   - **Word Limit:** 1 to 3 words maximum (e.g. `Distributed Systems`, `Machine Learning`, `Quantum Computing`). Sentences and multi-word commentary are strictly rejected.
+   - **Bogus Filler Word Blacklist:** Automatically rejects phrases containing conversational filler words, internet slang, non-nouns, pronouns, and filler verbs (e.g., `stuff`, `really`, `today`, `awesome`, `things`, `cool`, `update`, `hello`, `doing`, `please`, `good`, `bad`, `nice`, `great`, `lol`).
+   - **Technical Naming Patterns:** Fully supports valid technical nomenclature including symbols (`.`, `#`, `+`, `-`), such as `c++`, `c#`, `node.js`, `.net`, and `web3`.
+   - **Noise Elimination:** Rejects pure numbers (`12345`), pure punctuation (`???`, `---`), and strings without letters.
+
+3. **End-to-End Ingestion Gates:**
+   - **Profile Interests:** `PATCH /api/me/interests` validates all submitted items against `isValidTopicNoun`, rejecting bogus filler phrases with HTTP 400 Bad Request.
+   - **Signal Recording:** `recordTopicSignal` and `recordTopicFollow` verify candidates prior to persisting short-term or long-term interest vectors.
+
+### 11.2.2 Post Muting & Negative Term Complete Exclusion Pipeline
+
+When a user mutes topics or terms (e.g. `crypto`, `layoffs`, `politics`, `fintech`):
+- **Pre-Ranking Exclusion:** The candidate filter inspects both declared `topicLabels` and post body `text` using whole-word boundary regular expressions (`/(^|\W)term(\W|$)/i`).
+- **Complete Omission (`do not include it`):** Any post containing any muted word is completely eliminated from the eligible candidate pool before scoring. It is never included in the returned feed results, not merely downranked.
+- **Absolute Priority Over Positive Signals:** Even if a user has a high positive topic affinity (e.g. 95% affinity in Distributed Systems), if that post contains a muted word (e.g. `crypto`), it is strictly excluded. Muting is an inviolable negative gate.
+- **Immediate Reversibility:** Updating feed preferences to remove the muted term immediately restores matching posts to their proper ranked positions.
+- **Positive Content Promotion:** Non-muted posts with matching declared interests, verified authors, high substantive text length, and recent timestamps are scored and placed at the top of the feed.
+
+### 11.2.3 Needs-Based Alumni Network Ranking Engine (`computeAlumniNeedsScore`)
+
+When students and members search the alumni network—particularly when applying for **Job Referrals**, seeking **Mentorship**, or requesting **Career Q&A**:
+- **Referral Readiness Boost (+40 pts):** Alumni who have explicitly enabled referrals (`availableForReferrals: true`) and whose requests are active (`pauseIncomingRequests: false`) receive top priority.
+- **Penalty for Paused/Disabled Requests (-40 pts / -30 pts):** Alumni who have paused requests or disabled referrals are ranked at the bottom.
+- **Employer Verification Trust (+45 pts total):** Verified employees at the target company (`verificationStatus: "verified"` or `status: "employer-verified"`) receive +25 general verification boost + 20 target company boost, ensuring students reach professionals who can genuinely submit internal ATS referrals.
+- **Alma Mater Synergy (+15 pts):** Alumni from the student's own institution receive an alma mater affinity boost.
+- **Department & Degree Alignment (+10 pts):** Alumni from the same academic programme or department receive relevance boosts.
+- **Skill Overlap (+15 pts max):** Shared technical and professional skills provide granular rank refinement.
+- **Transparent Match Metrics:** Every returned alumnus includes an interpretable `relevanceScore` (1–100%) and `rankingReasons` explaining why they were recommended (e.g. `["Available for job referrals", "Employer-verified at Stripe", "Fellow alma mater member"]`).
+- **Dual Discovery Access:** Provided via `GET /api/discover/alumni` (accessible to all verified students and members) and `GET /api/discover/people` (for alumni).
+
 ## 11.3 Feed-ranking architecture
 
 Build the feed as a staged system.
